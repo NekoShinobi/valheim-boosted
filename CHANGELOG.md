@@ -5,6 +5,8 @@
 **Pre-alpha · Initial package**
 
 - Added draft-based GitHub release preparation with plain numeric tags such as `0.1.0`: write Markdown notes and choose release/pre-release in the release editor; preparation commits version files, changelog notes and README version updates to the target branch, builds that commit, then tags it and attaches both ZIPs with checksums. Publishing also triggers the versioned metrics image build.
+- Clarified release preparation failures with the requested repository/tag, visible draft and published tags, recovery instructions, and a workflow summary; published pre-releases are distinguished from saved drafts.
+- Fixed automated release commits to use GitHub's `CommittableBranch.branchName` input.
 
 - Added opt-in Stage 3 per-peer ZDO allowances with RTT/unsent-queue feedback and conservative connection-scoped Steam maximum-rate changes, including verified readback, restoration and external-writer handling.
 - Added opt-in Stage 4 captain ownership for eligible vanilla ships, with replicated helm-grant/attachment checks, exact reviewed contracts, dwell/cooldown and bounded transfers.

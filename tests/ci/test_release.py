@@ -3,6 +3,7 @@ import copy
 import base64
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -23,6 +24,7 @@ TAG = "0.1.0"
 
 class FakeGitHub:
     def __init__(self, tag=TAG):
+        self.repository = "owner/repo"
         self.tag = tag
         self.release = {"id": 42, "tag_name": tag, "target_commitish": "main", "draft": True,
                         "immutable": False, "prerelease": True, "name": "First pre-alpha",
@@ -136,8 +138,57 @@ class ReleaseChecks(unittest.TestCase):
 
     def test_missing_draft_requires_editor_first(self):
         self.github.release["tag_name"] = "0.2.0"
-        with self.assertRaisesRegex(ValueError, "Save exactly one draft"):
+        with self.assertRaisesRegex(ValueError, "No saved release draft") as error:
             prepare.resolve(self.github, TAG)
+        self.assertIn("tag '0.1.0'", str(error.exception))
+        self.assertIn('Visible draft tags (up to 10): ["0.2.0"]', str(error.exception))
+        self.assertIn("https://github.com/owner/repo/releases/new", str(error.exception))
+        self.assertIn("click Save draft", str(error.exception))
+        self.assertEqual(self.github.mutations, [])
+
+    def test_missing_draft_lists_published_tags_separately(self):
+        self.github.release.update(tag_name="0.2.0", draft=False, prerelease=True)
+        with self.assertRaises(ValueError) as error:
+            prepare.resolve(self.github, TAG)
+        self.assertIn("Visible draft tags (up to 10): []", str(error.exception))
+        self.assertIn('Published tags (up to 10): ["0.0.1", "0.2.0"]', str(error.exception))
+        self.assertNotIn("already has a published", str(error.exception))
+
+    def test_matching_published_release_explains_draft_vs_prerelease(self):
+        for prerelease in (True, False):
+            with self.subTest(prerelease=prerelease):
+                self.github.release.update(draft=False, prerelease=prerelease)
+                with self.assertRaisesRegex(ValueError, "already has a published") as error:
+                    prepare.resolve(self.github, TAG)
+                self.assertIn("A pre-release is not a draft", str(error.exception))
+                self.assertIn("new unused tag", str(error.exception))
+                self.assertEqual(self.github.mutations, [])
+
+    def test_duplicate_matching_records_are_not_reported_as_missing(self):
+        with patch.object(self.github, "api", return_value=[[self.github.release, self.github.release]]):
+            with self.assertRaisesRegex(ValueError, "Found 2 release records"):
+                prepare.resolve(self.github, TAG)
+
+    def test_unavailable_drafts_are_not_assumed_to_be_absent_without_permission_hint(self):
+        with patch.object(self.github, "api", return_value=[[]]):
+            with self.assertRaises(ValueError) as error:
+                prepare.resolve(self.github, TAG)
+        self.assertIn("is visible in owner/repo", str(error.exception))
+        self.assertIn("contents: write", str(error.exception))
+
+    def test_resolve_failure_adds_recovery_details_to_workflow_summary(self):
+        summary = self.assets / "summary.md"
+        self.github.release["tag_name"] = "0.2.0"
+        with patch.dict(prepare.os.environ, {"RELEASE_TAG": TAG, "GITHUB_REPOSITORY": "owner/repo",
+                                            "GITHUB_STEP_SUMMARY": str(summary)}), \
+                patch.object(prepare, "GitHub", return_value=self.github), \
+                patch("sys.argv", ["prepare-release.py", "resolve"]), patch("sys.stderr", new_callable=io.StringIO):
+            with self.assertRaises(SystemExit) as error:
+                prepare.main()
+        self.assertEqual(error.exception.code, 1)
+        self.assertIn("Release preparation stopped", summary.read_text())
+        self.assertIn("tag '0.1.0'", summary.read_text())
+        self.assertIn("click Save draft", summary.read_text())
 
     def test_reject_published_immutable_changed_tag_id_target_or_empty_notes_before_writes(self):
         original = copy.deepcopy(self.github.release)
@@ -390,7 +441,9 @@ class VersionPreparationChecks(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ["gh", "api", "graphql", "--input", "-"])
         request = json.loads(run.call_args.kwargs["input"])["variables"]["input"]
         self.assertEqual(request["expectedHeadOid"], COMMIT)
-        self.assertEqual(request["branch"], {"repositoryNameWithOwner": "owner/repo", "refName": "refs/heads/main"})
+        # CommittableBranch fields verified with GitHub's live __type query:
+        # https://docs.github.com/en/graphql/reference/git#committablebranch
+        self.assertEqual(request["branch"], {"repositoryNameWithOwner": "owner/repo", "branchName": "main"})
         self.assertEqual({f["path"]: base64.b64decode(f["contents"]) for f in request["fileChanges"]["additions"]}, changes)
         self.assertNotIn("force", request)
 

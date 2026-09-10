@@ -55,7 +55,7 @@ class GitHub:
           createCommitOnBranch(input: $input) { commit { oid } }
         }"""
         payload = {"query": query, "variables": {"input": {
-            "branch": {"repositoryNameWithOwner": self.repository, "refName": f"refs/heads/{branch}"},
+            "branch": {"repositoryNameWithOwner": self.repository, "branchName": branch},
             "expectedHeadOid": expected_sha,
             "message": {"headline": f"chore(release): prepare {tag}"},
             "fileChanges": {"additions": [
@@ -86,8 +86,13 @@ def version(tag):
 def draft_only(release, tag, release_id=None):
     if not release or release.get("tag_name") != tag or release_id is not None and release.get("id") != release_id:
         raise ValueError("Draft was removed or its tag changed; save the intended draft and run the workflow again")
-    if release.get("draft") is not True or release.get("immutable"):
-        raise ValueError("This workflow only attaches to drafts. Published releases are never replaced")
+    if release.get("draft") is not True:
+        kind = "pre-release" if release.get("prerelease") else "release"
+        raise ValueError(f"Tag {tag!r} already has a published {kind}. A pre-release is not a draft. "
+                         "For automatic version preparation, choose a new unused tag and click Save draft, "
+                         "then run this workflow. Published releases are never replaced")
+    if release.get("immutable"):
+        raise ValueError(f"Release {tag!r} is immutable; prepare a new draft with an unused tag")
     if not isinstance(release.get("body"), str) or not release["body"].strip():
         raise ValueError("Write a description in Releases → Edit → Describe this release, then Save draft")
     return release
@@ -113,9 +118,22 @@ def resolve(github, tag):
     release_version = version(tag)
     # The public by-tag endpoint is not relied on for unpublished drafts.
     pages = github.api("releases?per_page=100", paginate=True)
-    matches = [r for page in pages for r in page if r.get("tag_name") == tag]
-    if len(matches) != 1:
-        raise ValueError("Save exactly one draft for this tag in Releases → Draft a new release first")
+    releases = [r for page in pages for r in page]
+    matches = [r for r in releases if r.get("tag_name") == tag]
+    if not matches:
+        drafts = [r.get("tag_name") for r in releases if r.get("draft") is True]
+        published = [r.get("tag_name") for r in releases if r.get("draft") is False]
+        raise ValueError(
+            f"No saved release draft with tag {tag!r} is visible in {github.repository}. "
+            f"Visible draft tags (up to 10): {json.dumps(drafts[:10])}. "
+            f"Published tags (up to 10): {json.dumps(published[:10])}. "
+            f"Open https://github.com/{github.repository}/releases/new, select tag {tag!r} and a target branch, "
+            "write your description, and click Save draft. Then start a new Prepare GitHub release run with that exact tag. "
+            "A Git tag or an unsaved editor page is not a saved draft. If the draft is already saved, "
+            "check its repository/tag and that the workflow token has contents: write access to see drafts.")
+    if len(matches) > 1:
+        raise ValueError(f"Found {len(matches)} release records for tag {tag!r} in {github.repository}; "
+                         "choose a tag with exactly one saved draft")
     release = draft_only(matches[0], tag)
     target = release.get("target_commitish", "")
     if not isinstance(target, str) or not target or "\n" in target or "\r" in target:
@@ -265,6 +283,9 @@ def main():
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
             output.write(summary)
     except (ValueError, OSError, KeyError, RuntimeError, subprocess.CalledProcessError, zipfile.BadZipFile) as exc:
+        if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(summary_path, "a", encoding="utf-8") as output:
+                output.write(f"### Release preparation stopped\n\n{exc}\n")
         parser.exit(1, f"Release preparation failed: {exc}\n")
 
 

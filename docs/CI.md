@@ -35,6 +35,14 @@ Once a tag exists, retries build its existing commit and validate its versions w
 
 No personal token is needed for repositories that permit the workflow's branch and release writes. The preparation and attachment jobs use `GITHUB_TOKEN` with `contents: write`; the reusable build has `contents: read`. Branch protection, required PR/check rules and tag rules still apply. If they reject the version commit, preparation stops before building or tagging; it does not bypass those rules. Use code already pushed to `main`: GitHub can also reject tag creation for a branch with workflow changes that the Actions token cannot authorize. Commits and tags created with `GITHUB_TOKEN` do not start extra push workflows, so the mod build is called explicitly. A user publishing through the editor supplies the event that starts the image workflow.
 
+### If preparation cannot find the draft
+
+The **pre-release** checkbox and **Save draft** are separate controls. Clicking **Publish release** publishes even when pre-release is checked; automatic version preparation requires a release saved with **Save draft**. Creating a Git tag alone or leaving the editor open without saving does not create that draft.
+
+If resolution reports no matching draft, open [Draft a new release](https://github.com/NekoShinobi/valheim-boosted/releases/new), enter the exact numeric tag you will pass to the workflow, select `main`, write the description and click **Save draft**. Then start a new **Prepare GitHub release** run with that tag. The failure log and workflow summary show the requested repository/tag and the draft/published tags visible to the token. If your saved draft is missing from that list, verify its repository/tag and the workflow's `contents: write` permission. A tag that already has a published release requires a new unused version for this preparation flow; it is not converted back into a draft automatically.
+
+For fixes to the workflow or its scripts, push the fix and start a **new Run workflow** from `main`. GitHub's [Re-run jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs) uses the original run's commit, so rerunning an old failure will not pick up a script fix.
+
 ## Mod build
 
 `.github/workflows/mod.yml` runs for main, version tags, pull requests, manual dispatch, and as the reusable build called by release preparation. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It validates reviewed game-method fingerprints, runs fair-scheduler policy checks plus Harmony lifecycle/fallback and game-contract checks under Mono, builds Release, and uploads separate Thunderstore and direct plugin-install ZIP artifacts. See [compatibility checks](COMPATIBILITY.md).
