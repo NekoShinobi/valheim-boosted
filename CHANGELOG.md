@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0
+
+<!-- valheim-boosted:release-notes:start -->
+**Full Changelog**: https://github.com/NekoShinobi/valheim-boosted/compare/0.1.0...0.2.0
+<!-- valheim-boosted:release-notes:end -->
+
 ## v0.1.0
 
 **Pre-alpha · Initial package**

@@ -1,6 +1,6 @@
 {
   "name": "valheim_boosted",
-  "version_number": "0.1.0",
+  "version_number": "0.2.0",
   "website_url": "https://github.com/NekoShinobi/valheim-boosted",
   "description": "Pre-alpha Valheim networking diagnostics and optional fair scheduling for dedicated Steam servers. In-game HUD, server metrics and JSON telemetry for a separate dashboard.",
   "dependencies": [

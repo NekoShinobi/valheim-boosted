@@ -1,7 +1,7 @@
 <p align="center"><img src="thunderstore/icon.png" width="112" height="112" alt="Valheim Boosted signal rune"></p>
 
 <h1 align="center">valheim-boosted</h1>
-<p align="center"><strong>See what your connection is doing.</strong><br>0.1.0 · Pre-alpha · Valheim networking diagnostics</p>
+<p align="center"><strong>See what your connection is doing.</strong><br>0.2.0 · Pre-alpha · Valheim networking diagnostics</p>
 
 An in-game diagnostics HUD and a live server dashboard, built to help explain lag with measurements. This pre-alpha collects data and enables fair replication scheduling by default for dedicated Steam servers. Opt-in experiments add per-peer send allowances, Steam maximum-rate tuning, ship captain ownership and negotiated lossless compression.
 
@@ -14,12 +14,12 @@ An in-game diagnostics HUD and a live server dashboard, built to help explain la
 
 ## Install the mod
 
-Import `valheim-boosted-0.1.0.zip` into a Valheim profile in r2modman or Thunderstore Mod Manager, with **BepInExPack Valheim** and **Jötunn** installed.
+Import `valheim-boosted-0.2.0.zip` into a Valheim profile in r2modman or Thunderstore Mod Manager, with **BepInExPack Valheim** and **Jötunn** installed.
 
-For a manual Linux installation, download **`valheim-boosted-0.1.0-plugins.zip`**, stop the server, and extract directly into its plugins directory:
+For a manual Linux installation, download **`valheim-boosted-0.2.0-plugins.zip`**, stop the server, and extract directly into its plugins directory:
 
 ```sh
-unzip -o valheim-boosted-0.1.0-plugins.zip -d /path/to/BepInEx/plugins
+unzip -o valheim-boosted-0.2.0-plugins.zip -d /path/to/BepInEx/plugins
 ```
 
 For `valheim-server-docker`, use `/path/to/host/config/bepinex/plugins` as the destination, where that host config directory is mounted at `/config`. Both packages require BepInEx and Jötunn.
