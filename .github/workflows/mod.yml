@@ -2,7 +2,7 @@ name: Build mod
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
   pull_request:
   workflow_dispatch:
   workflow_call:
@@ -12,7 +12,7 @@ on:
         type: string
         required: true
       release_tag:
-        description: Numeric vMajor.Minor.Patch tag to validate against package metadata
+        description: Numeric Major.Minor.Patch tag to validate against package metadata
         type: string
         required: true
 

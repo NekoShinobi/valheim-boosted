@@ -16,7 +16,7 @@ prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
 COMMIT = "a" * 40
 OTHER = "b" * 40
-TAG = "v0.1.0"
+TAG = "0.1.0"
 
 
 class FakeGitHub:
@@ -36,7 +36,7 @@ class FakeGitHub:
             self.mutations.append((endpoint, copy.deepcopy(data)))
         if endpoint == "releases?per_page=100":
             assert paginate
-            return [[{"tag_name": "v0.0.1", "draft": False}], [copy.deepcopy(self.release)]]
+            return [[{"tag_name": "0.0.1", "draft": False}], [copy.deepcopy(self.release)]]
         if endpoint == "releases/42":
             if data is not None:
                 self.release.update(data)
@@ -115,18 +115,18 @@ class ReleaseChecks(unittest.TestCase):
                     prepare.resolve(self.github, TAG)
 
     def test_numeric_tag_required(self):
-        for tag in ("0.1.0", "v0.1.0-alpha", "v01.1.0", "v0.1.0\nsha=evil", "$(example)"):
+        for tag in ("v0.1.0", "0.1.0-alpha", "01.1.0", "0.1", "0.1.0\nsha=evil", "$(example)"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 prepare.resolve(self.github, tag)
 
     def test_missing_draft_requires_editor_first(self):
-        self.github.release["tag_name"] = "v0.2.0"
+        self.github.release["tag_name"] = "0.2.0"
         with self.assertRaisesRegex(ValueError, "Save exactly one draft"):
             prepare.resolve(self.github, TAG)
 
     def test_reject_published_immutable_changed_tag_id_target_or_empty_notes_before_writes(self):
         original = copy.deepcopy(self.github.release)
-        for update in ({"draft": False}, {"immutable": True}, {"tag_name": "v0.2.0"},
+        for update in ({"draft": False}, {"immutable": True}, {"tag_name": "0.2.0"},
                        {"id": 43}, {"target_commitish": "other"}, {"body": " \n"}):
             with self.subTest(update=update):
                 self.github.release = {**original, **update}
@@ -198,10 +198,10 @@ class ReleaseChecks(unittest.TestCase):
     def test_api_absence_is_distinct_from_permission_failure(self, run):
         github = prepare.GitHub("owner/repo")
         run.return_value = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
-        self.assertIsNone(github.api("git/ref/tags/v0.1.0", missing=True))
+        self.assertIsNone(github.api("git/ref/tags/0.1.0", missing=True))
         run.return_value = subprocess.CompletedProcess([], 1, "", "gh: Forbidden (HTTP 403)")
         with self.assertRaisesRegex(RuntimeError, "403"):
-            github.api("git/ref/tags/v0.1.0", missing=True)
+            github.api("git/ref/tags/0.1.0", missing=True)
 
     @patch.object(prepare.subprocess, "run")
     def test_upload_passes_paths_as_arguments_without_a_shell(self, run):

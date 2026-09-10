@@ -38,7 +38,7 @@ class PackagingChecks(unittest.TestCase):
         build.mkdir(parents=True)
         for name in ("ValheimBoosted.dll", "ValheimBoosted.pdb", "assembly_valheim.dll", "Jotunn.dll"):
             (build / name).write_bytes(b"fixture")
-        output = packager.package(self.root, tag=f"v{self.version}")
+        output = packager.package(self.root, tag=self.version)
         with zipfile.ZipFile(output) as archive:
             self.assertEqual(set(archive.namelist()), {
                 "manifest.json", "icon.png", "README.md", "CHANGELOG.md",
@@ -60,8 +60,8 @@ class PackagingChecks(unittest.TestCase):
                     provenance = self.root / ".local/references/ci-provenance.json"
                     provenance.parent.mkdir(parents=True)
                     provenance.write_text('{"build": "fixture"}')
-                thunderstore = packager.package(self.root, tag=f"v{self.version}")
-                output = packager.package(self.root, tag=f"v{self.version}", plugins_only=True)
+                thunderstore = packager.package(self.root, tag=self.version)
+                output = packager.package(self.root, tag=self.version, plugins_only=True)
                 self.assertEqual(output.name, f"valheim-boosted-{self.version}-plugins.zip")
                 expected = {"ValheimBoosted/ValheimBoosted.dll", "ValheimBoosted/ValheimBoosted.pdb"}
                 if include_provenance:
@@ -88,8 +88,9 @@ class PackagingChecks(unittest.TestCase):
             packager.validate(self.root)
 
     def test_version_and_tag_mismatch_rejected(self):
-        with self.assertRaisesRegex(ValueError, "Release tag"):
-            packager.validate(self.root, tag=f"v{self.next_version}")
+        for tag in (self.next_version, f"v{self.version}", f"{self.version}-alpha"):
+            with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, "Release tag"):
+                packager.validate(self.root, tag=tag)
         self.mutate_manifest("version_number", self.next_version)
         with self.assertRaisesRegex(ValueError, "Version mismatch"):
             packager.validate(self.root)

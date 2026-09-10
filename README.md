@@ -176,6 +176,6 @@ The mod requires local Valheim references and BepInEx/Jötunn libraries; follow 
 
 `mod/` holds the C# plugin, `dashboard/` the UI and Bun server, and `thunderstore/` the package metadata and artwork. GitHub workflows build the mod ZIP and a separate metrics image. [Build & release guide →](docs/CI.md)
 
-To release, write your notes in GitHub's **Draft a new release** editor, choose the pre-release checkbox if needed, and save the draft. Run **Prepare GitHub release** with its tag to attach both installation ZIPs and checksums, then publish from the editor. [Release steps →](docs/CI.md#create-a-github-release-or-pre-release)
+To release, write your notes in GitHub's **Draft a new release** editor, choose the pre-release checkbox if needed, and save the draft. Use a plain numeric tag such as `0.1.0`, without a `v` prefix. Run **Prepare GitHub release** with its tag to attach both installation ZIPs and checksums, then publish from the editor. [Release steps →](docs/CI.md#create-a-github-release-or-pre-release)
 
 **Pre-alpha status:** in-game validation and Docker execution remain pending. The Thunderstore package identifier is `valheim_boosted`; the project and mod name remain **valheim-boosted**.

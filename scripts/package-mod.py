@@ -42,8 +42,8 @@ def validate(root=ROOT, tag=None):
     js_version = json.loads((root / "package.json").read_text(encoding="utf-8"))["version"]
     if project_version != version or not match or match[1] != version or js_version != version:
         raise ValueError("Version mismatch between manifest, C# project/plugin and package.json")
-    if tag is not None and tag != f"v{version}":
-        raise ValueError(f"Release tag must be v{version}, got {tag}")
+    if tag is not None and tag != version:
+        raise ValueError(f"Release tag must be {version} (without a v prefix), got {tag}")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     headings = re.findall(r"^## v(\S+)\s*$", changelog, re.MULTILINE)
     if not headings or headings[0] != version:
@@ -100,7 +100,7 @@ def package(root=ROOT, tag=None, plugins_only=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Validate metadata without requiring a build")
-    parser.add_argument("--tag", help="Require a matching vMajor.Minor.Patch release tag")
+    parser.add_argument("--tag", help="Require a matching Major.Minor.Patch release tag without a v prefix")
     args = parser.parse_args()
     tag = args.tag
     if tag is None and os.environ.get("GITHUB_REF_TYPE") == "tag":

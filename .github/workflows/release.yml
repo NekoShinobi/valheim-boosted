@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Saved draft tag (for example v0.1.0). Write notes and choose pre-release in Releases → Draft a new release first.'
+        description: 'Saved draft tag (for example 0.1.0, without a v prefix). Write notes and choose pre-release in Releases → Draft a new release first.'
         required: true
         type: string
 

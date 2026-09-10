@@ -10,7 +10,7 @@ import subprocess
 from urllib.parse import quote
 import zipfile
 
-TAG = re.compile(r"v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))")
+TAG = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -42,8 +42,8 @@ class GitHub:
 def version(tag):
     match = TAG.fullmatch(tag)
     if not match:
-        raise ValueError("Use a numeric vMajor.Minor.Patch tag; choose pre-release using the release editor's checkbox")
-    return match[1]
+        raise ValueError("Use a numeric Major.Minor.Patch tag without a v prefix; choose pre-release using the release editor's checkbox")
+    return match[0]
 
 
 def draft_only(release, tag, release_id=None):

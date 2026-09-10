@@ -2,7 +2,7 @@ name: Build metrics image
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
   pull_request:
   workflow_dispatch:
   release:
