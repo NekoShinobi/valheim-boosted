@@ -53,7 +53,8 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y lib32gcc-s1 mono-runtime libmono-system-core4.0-cil libmono-system4.0-cil
+          # ZNet has an HttpClient field; the real-game checks also need Mono's HTTP library.
+          sudo apt-get install -y lib32gcc-s1 mono-runtime libmono-system-core4.0-cil libmono-system4.0-cil libmono-system-net-http4.0-cil
           mkdir -p "$RUNNER_TEMP/steamcmd" "$RUNNER_TEMP/valheim"
           curl --fail --location --retry 3 https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "$RUNNER_TEMP/steamcmd.tar.gz"
           tar -xzf "$RUNNER_TEMP/steamcmd.tar.gz" -C "$RUNNER_TEMP/steamcmd"

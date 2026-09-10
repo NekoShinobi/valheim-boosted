@@ -6,6 +6,8 @@
 **Full Changelog**: https://github.com/NekoShinobi/valheim-boosted/compare/0.1.0...0.2.0
 <!-- valheim-boosted:release-notes:end -->
 
+- Fixed CI network integration checks failing to load `ZNet.m_httpClient` by installing Mono's HTTP runtime library; missing local runtime dependencies now produce an actionable error.
+
 - Added default-on fresh replication relevance, bounded actor priority, early connection ZDO buffering with ordered replay, and negotiated 2 Hz map updates with marker interpolation.
 - Dedicated servers now require public location sharing for all players by default, including unmodded clients. Added the independent `Map.ForceLocationSharing` switch; saved client preferences are preserved.
 - Added replication/buffer/map activity and bandwidth counters to the HUD policy indicator, dashboard, history and report comparisons. History schema 4 and metric layout 3 retain earlier data and saved reports.

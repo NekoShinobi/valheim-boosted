@@ -34,6 +34,13 @@ internal static class Program
             if (name == "mscorlib" || name == "netstandard" || name == "System" || name.StartsWith("System.")) return null;
             var path = Path.Combine(directory, name + ".dll"); return File.Exists(path) ? Assembly.LoadFrom(path) : null;
         };
+        // Check before Run is JIT-compiled: loading ZNet's fields requires the runtime HTTP assembly.
+        // Resolve Mono's implementation, never a framework DLL copied from the game's Managed directory.
+        if (Type.GetType("System.Net.Http.HttpClient, System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a", false) == null)
+        {
+            System.Console.Error.WriteLine("Missing Mono System.Net.Http runtime library. On Ubuntu/Debian, install libmono-system-net-http4.0-cil and rerun the network integration checks.");
+            return 1;
+        }
         AccessTools.PropertySetter(typeof(BepInEx.Paths), "BepInExConfigPath").Invoke(null, new object[] { Path.Combine(Path.GetTempPath(), "vb-network-checks-bepinex.cfg") });
         return Run();
     }
