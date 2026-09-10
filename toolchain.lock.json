@@ -1,0 +1,21 @@
+{
+  "sdk": {
+    "version": "10.0.401",
+    "name": "dotnet-sdk-linux-x64.tar.gz",
+    "rid": "linux-x64",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-linux-x64.tar.gz",
+    "hash": "51c8b999af9e8dd9998c9edc5944e19a90788862068acd38694e098889054ce8c23d4f0c5cccfa16bf187d044562359e5ee69a9f8ad0bbe913ba90311fbce25b"
+  },
+  "packages": {
+    "bepinex": {
+      "name": "denikson-BepInExPack_Valheim-5.4.2350",
+      "url": "https://gcdn.thunderstore.io/live/repository/packages/denikson-BepInExPack_Valheim-5.4.2350.zip",
+      "sha256": "37a91c000b4e88f2ed7a4bd7d812239852d2e36cbf0ff0a9f5faacfba46b105f"
+    },
+    "jotunn": {
+      "name": "ValheimModding-Jotunn-2.30.0",
+      "url": "https://gcdn.thunderstore.io/live/repository/packages/ValheimModding-Jotunn-2.30.0.zip",
+      "sha256": "f7f218ac3f97b27a7e65d62b5ebe7c29b93129bf3e56cf41b6870bef1ef161fd"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+name: Build mod
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: mod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Thunderstore metadata and packaging
+        run: |
+          python3 scripts/package-mod.py --check
+          python3 -m unittest discover -s tests/packaging -v
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Check managed telemetry components
+        run: dotnet run --project tests/TelemetryChecks/TelemetryChecks.csproj
+      - name: Download dedicated-server build references
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lib32gcc-s1
+          mkdir -p "$RUNNER_TEMP/steamcmd" "$RUNNER_TEMP/valheim"
+          curl --fail --location --retry 3 https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "$RUNNER_TEMP/steamcmd.tar.gz"
+          tar -xzf "$RUNNER_TEMP/steamcmd.tar.gz" -C "$RUNNER_TEMP/steamcmd"
+          "$RUNNER_TEMP/steamcmd/steamcmd.sh" +force_install_dir "$RUNNER_TEMP/valheim" +login anonymous +app_update 896660 validate +quit
+          python3 scripts/prepare-ci.py "$RUNNER_TEMP/valheim"
+      - name: Build and package
+        id: package
+        run: |
+          dotnet restore mod/ValheimBoosted.csproj --locked-mode
+          dotnet build mod/ValheimBoosted.csproj --configuration Release --no-restore
+          python3 scripts/package-mod.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: valheim-boosted-mod
+          path: ${{ steps.package.outputs.package_path }}
+          if-no-files-found: error
+          retention-days: 14

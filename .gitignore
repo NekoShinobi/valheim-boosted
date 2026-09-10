@@ -1,0 +1,25 @@
+.tools/
+.local/
+decomp/*/
+decomp/manifest.json
+**/bin/
+**/obj/
+artifacts/
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+__pycache__/
+*.pyc
+
+# Local planning, investigation, and session reports
+/INSTALLATION-REPORT.md
+/docs/*-REPORT.md
+/research/
+/decomp/
+
+# Machine-specific SDK path; copy settings.example.json on a fresh checkout
+/.vscode/settings.json

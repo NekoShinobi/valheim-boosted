@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+workspace_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export DOTNET_ROOT="$workspace_root/.tools/dotnet"
+export DOTNET_CLI_HOME="$workspace_root/.tools/dotnet-home"
+export NUGET_PACKAGES="$workspace_root/.tools/nuget"
+export NUGET_HTTP_CACHE_PATH="$workspace_root/.tools/nuget-http-cache"
+export NUGET_SCRATCH="$workspace_root/.tools/nuget-scratch"
+export NUGET_PLUGINS_CACHE_PATH="$workspace_root/.tools/nuget-plugins-cache"
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export PATH="$DOTNET_ROOT:$PATH"
+exec code --user-data-dir "$workspace_root/.tools/vscode-user-data" --extensions-dir "$workspace_root/.tools/vscode-extensions" "$workspace_root/valheim-boosted.code-workspace" "$@"

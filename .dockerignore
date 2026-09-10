@@ -1,0 +1,11 @@
+**
+!package.json
+!bun.lock
+!dashboard/
+!dashboard/**
+!docker/
+!docker/metrics.Dockerfile
+dashboard/dist
+dashboard/node_modules
+dashboard/**/*.test.ts
+dashboard/test

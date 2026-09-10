@@ -1,0 +1,25 @@
+# Add this service to your existing stack, or run this file with the paths below configured.
+services:
+  metrics:
+    build:
+      context: ..
+      dockerfile: docker/metrics.Dockerfile
+    image: valheim-boosted-metrics:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      TELEMETRY_PATH: /telemetry/snapshot.json
+      HISTORY_SAMPLES: '300'
+    volumes:
+      - type: bind
+        source: ${TELEMETRY_DIRECTORY:?Set TELEMETRY_DIRECTORY to the host telemetry directory}
+        target: /telemetry
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5

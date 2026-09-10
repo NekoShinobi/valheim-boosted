@@ -1,0 +1,25 @@
+{
+  "dotnet.defaultSolution": "ValheimBoosted.sln",
+  "dotnet.preferCSharpExtension": true,
+  "files.watcherExclude": {
+    "**/.tools/**": true,
+    "**/.local/**": true,
+    "**/decomp/**": true
+  },
+  "search.exclude": {
+    "**/.tools": true,
+    "**/.local": true,
+    "**/bin": true,
+    "**/obj": true
+  },
+  "terminal.integrated.env.linux": {
+    "DOTNET_ROOT": "${workspaceFolder}/.tools/dotnet",
+    "DOTNET_CLI_HOME": "${workspaceFolder}/.tools/dotnet-home",
+    "NUGET_PACKAGES": "${workspaceFolder}/.tools/nuget",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "PATH": "${workspaceFolder}/.tools/dotnet:${env:PATH}",
+    "NUGET_HTTP_CACHE_PATH": "${workspaceFolder}/.tools/nuget-http-cache",
+    "NUGET_SCRATCH": "${workspaceFolder}/.tools/nuget-scratch",
+    "NUGET_PLUGINS_CACHE_PATH": "${workspaceFolder}/.tools/nuget-plugins-cache"
+  }
+}

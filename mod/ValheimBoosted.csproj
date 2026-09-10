@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ValheimBoosted</AssemblyName>
+    <RootNamespace>ValheimBoosted</RootNamespace>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <GameReferences>$(MSBuildThisFileDirectory)../.local/references/Managed</GameReferences>
+    <ModLibraries>$(MSBuildThisFileDirectory)../.local/references/ModLibraries</ModLibraries>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="$(GameReferences)/com.rlabrecque.steamworks.net.dll"><Private>false</Private></Reference>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="$(GameReferences)/assembly_*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameReferences)/Assembly-CSharp.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameReferences)/UnityEngine*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(ModLibraries)/BepInEx.dll"><Private>false</Private></Reference>
+    <Reference Include="$(ModLibraries)/0Harmony.dll"><Private>false</Private></Reference>
+    <Reference Include="$(ModLibraries)/Jotunn.dll"><Private>false</Private></Reference>
+  </ItemGroup>
+  <Target Name="CheckGameReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(GameReferences)/assembly_valheim.dll')" Text="Game references missing. Run python3 scripts/dev.py refresh." />
+    <Error Condition="!Exists('$(ModLibraries)/Jotunn.dll')" Text="Mod libraries missing. Run python3 scripts/dev.py setup." />
+  </Target>
+</Project>
