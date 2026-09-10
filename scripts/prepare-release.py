@@ -84,8 +84,13 @@ def version(tag):
 
 
 def draft_only(release, tag, release_id=None):
-    if not release or release.get("tag_name") != tag or release_id is not None and release.get("id") != release_id:
-        raise ValueError("Draft was removed or its tag changed; save the intended draft and run the workflow again")
+    if not isinstance(release, dict) or not release:
+        raise ValueError(f"Expected draft for tag {tag!r}, but GitHub returned no release record")
+    if release_id is not None and release.get("id") != release_id:
+        raise ValueError(f"Expected release ID {release_id}, but GitHub returned {release.get('id')!r}")
+    if release.get("tag_name") != tag:
+        raise ValueError(f"Release ID {release.get('id')!r} has tag {release.get('tag_name')!r}; "
+                         f"expected {tag!r}. Check the existing draft's tag before retrying")
     if release.get("draft") is not True:
         kind = "pre-release" if release.get("prerelease") else "release"
         raise ValueError(f"Tag {tag!r} already has a published {kind}. A pre-release is not a draft. "
@@ -228,9 +233,10 @@ def attach(github, tag, release_id, sha, target, directory, expected_notes_diges
     if current is None:
         # Reserve exactly the built commit. Never move an existing tag.
         github.api("git/refs", {"ref": f"refs/tags/{tag}", "sha": sha})
-    # Pin the draft too, so branch movement cannot change what is published.
+    # Preserve the tag explicitly: a target-only draft PATCH can replace it with
+    # an untagged-* placeholder. Both values must identify the built source.
     # Do not send body, name, prerelease, draft or make_latest: editor choices remain intact.
-    github.api(endpoint, {"target_commitish": sha})
+    draft_only(github.api(endpoint, {"tag_name": tag, "target_commitish": sha}), tag, release_id)
     check_draft()
     checksum = directory / "SHA256SUMS"
     checksum.write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in paths), encoding="utf-8")

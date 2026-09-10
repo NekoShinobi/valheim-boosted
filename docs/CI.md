@@ -43,6 +43,8 @@ If resolution reports no matching draft, open [Draft a new release](https://gith
 
 For fixes to the workflow or its scripts, push the fix and start a **new Run workflow** from `main`. GitHub's [Re-run jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs) uses the original run's commit, so rerunning an old failure will not pick up a script fix.
 
+Attachment sends both `tag_name` and `target_commitish` when pinning the draft. Older code sent only the target, which could leave that same draft named `untagged-*` after the Git tag had already been created. If this happened, keep the existing draft and verify its release ID and the tag's commit against the failed run. Restore the intended tag on that draft; do not delete or move the Git tag. The fixed workflow can rebuild that tagged commit, or the already successful run's checked ZIPs can be attached to the repaired draft.
+
 ## Mod build
 
 `.github/workflows/mod.yml` runs for main, version tags, pull requests, manual dispatch, and as the reusable build called by release preparation. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It validates reviewed game-method fingerprints, runs fair-scheduler policy checks plus Harmony lifecycle/fallback and game-contract checks under Mono, builds Release, and uploads separate Thunderstore and direct plugin-install ZIP artifacts. See [compatibility checks](COMPATIBILITY.md).

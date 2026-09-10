@@ -46,6 +46,9 @@ class FakeGitHub:
             return [[{"tag_name": "0.0.1", "draft": False}], [copy.deepcopy(self.release)]]
         if endpoint == "releases/42":
             if data is not None:
+                # Observed GitHub draft behavior: a target-only PATCH loses the tag.
+                if "target_commitish" in data and "tag_name" not in data:
+                    self.release["tag_name"] = "untagged-fixture"
                 self.release.update(data)
             return copy.deepcopy(self.release)
         if endpoint == f"git/ref/tags/{self.tag}":
@@ -232,7 +235,7 @@ class ReleaseChecks(unittest.TestCase):
                     self.assertEqual(self.github.ref["object"]["sha"], COMMIT)
                     self.assertIn("user-notes.txt", [a["name"] for a in result["assets"]])
                 self.assertEqual(self.github.mutations.count(("git/refs", {"ref": f"refs/tags/{TAG}", "sha": COMMIT})), 1)
-                self.assertTrue(all(data == {"target_commitish": COMMIT}
+                self.assertTrue(all(data == {"tag_name": TAG, "target_commitish": COMMIT}
                                     for endpoint, data in self.github.mutations if endpoint == "releases/42"))
                 self.assertEqual(self.github.uploads[-1], ["valheim-boosted-0.1.0.zip", "valheim-boosted-0.1.0-plugins.zip", "SHA256SUMS"])
                 for line in (self.assets / "SHA256SUMS").read_text().splitlines():
@@ -265,6 +268,25 @@ class ReleaseChecks(unittest.TestCase):
         self.github.release["body"] += "\nNew notes to put in the changelog.\n"
         with self.assertRaisesRegex(ValueError, "description changed"):
             prepare.attach(self.github, TAG, 42, COMMIT, "main", self.assets, digest)
+        self.assertEqual(self.github.mutations, [])
+        self.assertEqual(self.github.uploads, [])
+
+    def test_target_patch_preserves_the_release_tag_and_uploads_to_same_draft(self):
+        self.github.ref = {"object": {"type": "commit", "sha": COMMIT}}
+        release = self.attach()
+        self.assertEqual(release["tag_name"], TAG)
+        self.assertEqual(release["id"], 42)
+        self.assertEqual(release["target_commitish"], COMMIT)
+        self.assertTrue(release["draft"])
+        self.assertEqual(len(self.github.uploads), 1)
+
+    def test_tag_mismatch_reports_actual_identity_without_guessing_a_replacement(self):
+        self.github.release["tag_name"] = "untagged-fixture"
+        with self.assertRaises(ValueError) as error:
+            self.attach()
+        self.assertIn("Release ID 42", str(error.exception))
+        self.assertIn("untagged-fixture", str(error.exception))
+        self.assertIn("expected '0.1.0'", str(error.exception))
         self.assertEqual(self.github.mutations, [])
         self.assertEqual(self.github.uploads, [])
 
