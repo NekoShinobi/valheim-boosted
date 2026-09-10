@@ -19,19 +19,81 @@ Enter a world and press **F8**. The HUD starts at the top right; configure it in
 
 [Installation & configuration](docs/MOD-INSTALL.md) · [Changelog](CHANGELOG.md) · [Metric definitions](docs/OBSERVABILITY.md)
 
-## Start the dashboard
+## Start the metrics server
 
-The companion dashboard uses **Svelte + TypeScript + ECharts**, served by **Bun 1.4.0** on port **8080**.
+The **Svelte + TypeScript + ECharts** dashboard runs separately from Valheim, served by **Bun 1.4.0** on port **8080**. It reads the mod's JSON export; no connection to the game port is needed.
+
+### Run with Bun
+
+From the repository root:
 
 ```sh
 bun install --frozen-lockfile
 bun run build
-bun start
+HOST=127.0.0.1 PORT=8080 \
+  TELEMETRY_PATH="$PWD/.local/profile/BepInEx/valheim-boosted-telemetry/snapshot.json" \
+  HISTORY_SAMPLES=300 STALE_AFTER_MS=5000 \
+  bun start
 ```
 
-Open [localhost:8080](http://127.0.0.1:8080). It reads the local development profile's snapshot by default; set `TELEMETRY_PATH` to read another server's export. Servers and player hosts export automatically. The page shows **Waiting** until a snapshot arrives.
+This example reads the development profile. For another server, set `TELEMETRY_PATH` to its snapshot path **as seen by the Bun process**. The page shows **Waiting** until the mod exports a snapshot.
 
-For containers, run the separate metrics image with a read-only mount of the telemetry directory. [Dashboard & Docker setup →](dashboard/README.md)
+### Run with Docker
+
+For a Valheim container with `/srv/valheim/config:/config` mounted, set this in the mod's `valheim.boosted.cfg`, then restart Valheim:
+
+```ini
+[Telemetry]
+Enabled = true
+ExportOnServer = true
+ExportPath = /config/valheim-boosted/telemetry/snapshot.json
+```
+
+Share that export directory with the metrics container:
+
+| Location | Path |
+| --- | --- |
+| Valheim container writes | `/config/valheim-boosted/telemetry/snapshot.json` |
+| Docker host stores | `/srv/valheim/config/valheim-boosted/telemetry/snapshot.json` |
+| Metrics container reads | `/telemetry/snapshot.json` |
+
+Create the host directory first, with permissions that let Valheim write and the metrics image's `bun` user read it. Adjust the host path to match your existing Valheim volume. From the repository root:
+
+```sh
+docker build -f docker/metrics.Dockerfile -t valheim-boosted-metrics:local .
+docker run -d --name valheim-boosted-metrics --restart unless-stopped \
+  -p 127.0.0.1:8080:8080 \
+  -e HOST=0.0.0.0 -e PORT=8080 \
+  -e TELEMETRY_PATH=/telemetry/snapshot.json \
+  -e HISTORY_SAMPLES=300 -e STALE_AFTER_MS=5000 \
+  --mount type=bind,source=/srv/valheim/config/valheim-boosted/telemetry,target=/telemetry,readonly \
+  valheim-boosted-metrics:local
+```
+
+Mount the **whole directory** read-only: the mod replaces `snapshot.json` atomically, so mounting only the file can leave the reader seeing an old snapshot. `HOST=0.0.0.0` lets Docker reach Bun inside the container; the port mapping exposes it only on the host's loopback interface.
+
+Or use the included Compose file:
+
+```sh
+TELEMETRY_DIRECTORY=/srv/valheim/config/valheim-boosted/telemetry \
+  docker compose -f docker/compose.metrics.yml up -d --build
+```
+
+`TELEMETRY_DIRECTORY` selects the **host mount source** for Compose; `TELEMETRY_PATH` selects the **snapshot file inside the metrics process**.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1`; `0.0.0.0` in Docker | HTTP bind address |
+| `PORT` | `8080` | HTTP port; match Docker's container-port mapping if changed |
+| `TELEMETRY_PATH` | Development-profile path above; `/telemetry/snapshot.json` in Docker | JSON snapshot to read |
+| `HISTORY_SAMPLES` | `300` | Keep 1–3600 snapshots in memory; resets on restart or world/process change |
+| `STALE_AFTER_MS` | `5000` | Minimum stale threshold, 1000–300000 ms; extended to three sample intervals |
+
+Open [localhost:8080](http://127.0.0.1:8080) on the host. For an SSH host, forward port 8080 in VS Code's **Ports** panel. The service has no built-in authentication; use an access-controlled reverse proxy if exposing it beyond localhost.
+
+[API details & deployment notes →](dashboard/README.md)
 
 ## Develop
 
