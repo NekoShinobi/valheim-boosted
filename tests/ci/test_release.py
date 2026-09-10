@@ -1,10 +1,12 @@
 """Exercise release preparation without publishing or calling GitHub."""
 import copy
+import base64
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -20,8 +22,9 @@ TAG = "0.1.0"
 
 
 class FakeGitHub:
-    def __init__(self):
-        self.release = {"id": 42, "tag_name": TAG, "target_commitish": "main", "draft": True,
+    def __init__(self, tag=TAG):
+        self.tag = tag
+        self.release = {"id": 42, "tag_name": tag, "target_commitish": "main", "draft": True,
                         "immutable": False, "prerelease": True, "name": "First pre-alpha",
                         "body": "## Changes\n\n- Literal `code` and $(example).\n", "assets": []}
         self.ref = None
@@ -30,6 +33,8 @@ class FakeGitHub:
         self.mutations = []
         self.uploads = []
         self.bad_upload = False
+        self.commits = []
+        self.commit_race = False
 
     def api(self, endpoint, data=None, missing=False, paginate=False):
         if data is not None:
@@ -41,21 +46,23 @@ class FakeGitHub:
             if data is not None:
                 self.release.update(data)
             return copy.deepcopy(self.release)
-        if endpoint == f"git/ref/tags/{TAG}":
+        if endpoint == f"git/ref/tags/{self.tag}":
             assert missing
             return copy.deepcopy(self.ref)
         if endpoint == "git/refs":
-            assert self.ref is None and data["ref"] == f"refs/tags/{TAG}"
+            assert self.ref is None and data["ref"] == f"refs/tags/{self.tag}"
             self.ref = {"object": {"type": "commit", "sha": data["sha"]}}
             return copy.deepcopy(self.ref)
         if endpoint.startswith("git/tags/"):
             return copy.deepcopy(self.annotated[endpoint.removeprefix("git/tags/")])
         if endpoint == "commits/main":
             return {"sha": self.branch_sha}
+        if endpoint == "git/ref/heads/main":
+            return {"object": {"type": "commit", "sha": self.branch_sha}}
         raise AssertionError(f"Unexpected API request: {endpoint}")
 
     def upload(self, tag, paths):
-        assert tag == TAG
+        assert tag == self.tag
         self.uploads.append([p.name for p in paths])
         names = {p.name for p in paths}
         self.release["assets"] = [a for a in self.release["assets"] if a["name"] not in names]
@@ -66,6 +73,14 @@ class FakeGitHub:
         ]
         if self.bad_upload:
             self.release["assets"][-1]["digest"] = "sha256:wrong"
+
+    def commit_files(self, branch, expected_sha, changes, tag):
+        assert branch == "main" and tag == self.tag
+        if self.commit_race or self.branch_sha != expected_sha:
+            raise RuntimeError("Expected branch head no longer matches")
+        self.commits.append(copy.deepcopy(changes))
+        self.branch_sha = OTHER
+        return OTHER
 
 
 class ReleaseChecks(unittest.TestCase):
@@ -194,6 +209,14 @@ class ReleaseChecks(unittest.TestCase):
             self.attach()
         self.assertTrue(self.github.release["draft"])
 
+    def test_notes_changed_during_build_prevents_tag_and_asset_creation(self):
+        digest = prepare.notes_digest(self.github.release)
+        self.github.release["body"] += "\nNew notes to put in the changelog.\n"
+        with self.assertRaisesRegex(ValueError, "description changed"):
+            prepare.attach(self.github, TAG, 42, COMMIT, "main", self.assets, digest)
+        self.assertEqual(self.github.mutations, [])
+        self.assertEqual(self.github.uploads, [])
+
     @patch.object(prepare.subprocess, "run")
     def test_api_absence_is_distinct_from_permission_failure(self, run):
         github = prepare.GitHub("owner/repo")
@@ -209,3 +232,170 @@ class ReleaseChecks(unittest.TestCase):
         prepare.GitHub("owner/repo").upload(TAG, paths)
         run.assert_called_once_with(["gh", "release", "upload", TAG, "--repo", "owner/repo",
                                      "--clobber", *map(str, paths)], check=True)
+
+
+class VersionPreparationChecks(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.versions = prepare.version_tools()
+        for name in self.versions.VALIDATION_FILES:
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        self.current = self.versions.packager.validate(self.root)["version_number"]
+        # Keep fixtures independent of the actual release description on future tags.
+        (self.root / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## v{self.current}\n\nHand-written details.\n\n## v0.0.0\n\nOlder release.\n")
+        major, minor, patch_version = map(int, self.current.split("."))
+        self.next = f"{major}.{minor}.{patch_version + 1}"
+        self.github = FakeGitHub(self.next)
+
+    def apply_commit_to_checkout(self):
+        # Model checking out the newly committed source on a retry.
+        for name, data in self.github.commits[-1].items():
+            (self.root / name).write_bytes(data)
+
+    def prepare_version(self, sha=COMMIT):
+        return prepare.prepare_source(self.github, self.github.tag, 42, sha, "main", self.root)
+
+    def test_updates_all_versions_and_readme_examples_preserving_old_history_and_dependencies(self):
+        original = {name: (self.root / name).read_bytes() for name in self.versions.VALIDATION_FILES}
+        notes = "# Highlights\n\n## Changes\n\n- Faster sync – measured.\n\n```md\n## v99.0.0\n$(example)\n```"
+        changes = self.versions.plan(self.root, self.next, notes)
+        self.assertEqual(set(changes), set(self.versions.EDITABLE_FILES))
+        self.assertEqual(original, {name: (self.root / name).read_bytes() for name in original})
+        for name, data in changes.items():
+            (self.root / name).write_bytes(data)
+        self.assertEqual(self.versions.packager.validate(self.root, tag=self.next)["version_number"], self.next)
+        text = changes["CHANGELOG.md"].decode()
+        self.assertIn("### Highlights", text)
+        self.assertIn("#### Changes", text)
+        self.assertIn("```md\n## v99.0.0\n$(example)\n```", text)
+        old_text = original["CHANGELOG.md"].decode()
+        self.assertTrue(text.endswith(old_text[old_text.index(f"## v{self.current}"):]))
+        readme = changes["README.md"].decode()
+        self.assertIn(f"<br>{self.next} ·", readme)
+        self.assertNotIn(f"valheim-boosted-{self.current}-plugins.zip", readme)
+        self.assertIn(f"valheim-boosted-{self.next}-plugins.zip", readme)
+        self.assertEqual(json.loads(changes["package.json"])["dependencies"],
+                         json.loads(original["package.json"])["dependencies"])
+        self.assertEqual(json.loads(changes["thunderstore/manifest.json"])["dependencies"],
+                         json.loads(original["thunderstore/manifest.json"])["dependencies"])
+
+    def test_initial_version_keeps_hand_written_notes_and_same_notes_are_idempotent(self):
+        original = (self.root / "CHANGELOG.md").read_text()
+        notes = self.github.release["body"]
+        changes = self.versions.plan(self.root, self.current, notes)
+        self.assertEqual(set(changes), {"CHANGELOG.md"})
+        (self.root / "CHANGELOG.md").write_bytes(changes["CHANGELOG.md"])
+        self.assertTrue(changes["CHANGELOG.md"].decode().endswith(original.split(f"## v{self.current}\n", 1)[1].lstrip("\n")))
+        self.assertEqual(self.versions.plan(self.root, self.current, notes), {})
+        updated = self.versions.plan(self.root, self.current, "Revised release description.")
+        self.assertNotIn(notes.strip(), updated["CHANGELOG.md"].decode())
+        self.assertIn("Revised release description.", updated["CHANGELOG.md"].decode())
+        self.assertTrue(updated["CHANGELOG.md"].decode().endswith(original.split(f"## v{self.current}\n", 1)[1].lstrip("\n")))
+
+    def test_invalid_version_or_notes_never_changes_source(self):
+        original = (self.root / "CHANGELOG.md").read_bytes()
+        for tag, notes in (("0.0.0", "Older release"), ("v1.0.0", "Invalid prefix"),
+                           (self.next, "```\nunclosed code"), (self.next, self.versions.NOTES_START)):
+            with self.subTest(tag=tag, notes=notes), self.assertRaises(ValueError):
+                self.versions.plan(self.root, tag, notes)
+        self.assertEqual((self.root / "CHANGELOG.md").read_bytes(), original)
+
+    def test_commit_before_build_and_retry_reuses_the_committed_version(self):
+        result = self.prepare_version()
+        self.assertEqual(result["sha"], OTHER)
+        self.assertEqual(result["notes_digest"], prepare.notes_digest(self.github.release))
+        self.assertEqual(len(self.github.commits), 1)
+        self.assertIsNone(self.github.ref)  # Tag is created only after the build.
+        self.assertTrue(self.github.release["draft"])
+        self.apply_commit_to_checkout()
+        self.assertEqual(self.prepare_version(OTHER), result)
+        self.assertEqual(len(self.github.commits), 1)
+
+    def test_rerun_updates_generated_notes_without_duplicate_changelog_versions(self):
+        self.prepare_version()
+        self.apply_commit_to_checkout()
+        self.github.release["body"] = "Updated notes after a failed build."
+        self.prepare_version(OTHER)
+        self.assertEqual(set(self.github.commits[-1]), {"CHANGELOG.md"})
+        self.apply_commit_to_checkout()
+        changelog = (self.root / "CHANGELOG.md").read_text()
+        self.assertEqual([s["version"] for s in self.versions.packager.release_sections(changelog)][:2], [self.next, self.current])
+        self.assertIn(self.github.release["body"], changelog)
+
+    def test_bumped_commit_packages_and_attaches_under_the_selected_tag(self):
+        result = self.prepare_version()
+        self.apply_commit_to_checkout()
+        build = self.root / "mod/bin/Release/net48"
+        build.mkdir(parents=True)
+        for name in ("ValheimBoosted.dll", "ValheimBoosted.pdb"):
+            (build / name).write_bytes(f"Fixture build of {result['sha']}: {name}".encode())
+        for plugins in (False, True):
+            self.versions.packager.package(self.root, tag=self.next, plugins_only=plugins)
+        release = prepare.attach(self.github, self.next, 42, result["sha"], "main",
+                                 self.root / "artifacts", result["notes_digest"])
+        self.assertEqual(self.github.ref["object"]["sha"], result["sha"])
+        self.assertEqual(release["target_commitish"], result["sha"])
+        self.assertTrue(release["draft"])
+        with zipfile.ZipFile(self.root / f"artifacts/valheim-boosted-{self.next}.zip") as package:
+            self.assertEqual(json.loads(package.read("manifest.json"))["version_number"], self.next)
+            self.assertIn(self.github.release["body"].strip(), package.read("CHANGELOG.md").decode())
+
+    def test_existing_tag_only_builds_matching_committed_version(self):
+        self.github.ref = {"object": {"type": "commit", "sha": COMMIT}}
+        with self.assertRaisesRegex(ValueError, "Release tag"):
+            self.prepare_version()
+        self.github.tag = self.current
+        self.github.release["tag_name"] = self.current
+        result = self.prepare_version()
+        self.assertEqual(result["sha"], COMMIT)
+        self.assertEqual(self.github.commits, [])
+
+    def test_branch_movement_before_or_during_commit_cannot_overwrite_changes(self):
+        self.github.branch_sha = OTHER
+        with self.assertRaisesRegex(ValueError, "branch moved"):
+            self.prepare_version()
+        self.github.branch_sha = COMMIT
+        self.github.commit_race = True
+        with self.assertRaisesRegex(RuntimeError, "branch head"):
+            self.prepare_version()
+        self.assertEqual(self.github.commits, [])
+        self.assertIsNone(self.github.ref)
+
+    def test_draft_edited_during_planning_does_not_commit_stale_notes(self):
+        original_plan = self.versions.plan
+
+        def edit_while_planning(*args):
+            changes = original_plan(*args)
+            self.github.release["body"] += "\nMore notes."
+            return changes
+
+        with patch.object(prepare, "version_tools", return_value=self.versions), \
+                patch.object(self.versions, "plan", side_effect=edit_while_planning):
+            with self.assertRaisesRegex(ValueError, "Draft changed"):
+                self.prepare_version()
+        self.assertEqual(self.github.commits, [])
+
+    @patch.object(prepare.subprocess, "run")
+    def test_graphql_commit_passes_exact_head_and_base64_files_as_structured_data(self, run):
+        changes = self.versions.plan(self.root, self.next, self.github.release["body"])
+        run.return_value = subprocess.CompletedProcess([], 0, json.dumps({
+            "data": {"createCommitOnBranch": {"commit": {"oid": OTHER}}}}), "")
+        sha = prepare.GitHub("owner/repo").commit_files("main", COMMIT, changes, self.next)
+        self.assertEqual(sha, OTHER)
+        self.assertEqual(run.call_args.args[0], ["gh", "api", "graphql", "--input", "-"])
+        request = json.loads(run.call_args.kwargs["input"])["variables"]["input"]
+        self.assertEqual(request["expectedHeadOid"], COMMIT)
+        self.assertEqual(request["branch"], {"repositoryNameWithOwner": "owner/repo", "refName": "refs/heads/main"})
+        self.assertEqual({f["path"]: base64.b64decode(f["contents"]) for f in request["fileChanges"]["additions"]}, changes)
+        self.assertNotIn("force", request)
+
+    @patch.object(prepare.subprocess, "run")
+    def test_graphql_error_cannot_be_reported_as_a_successful_commit(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, '{"data": null, "errors": [{"message": "branch protected"}]}', "")
+        with self.assertRaisesRegex(RuntimeError, "branch protected"):
+            prepare.GitHub("owner/repo").commit_files("main", COMMIT, {"CHANGELOG.md": b"notes"}, self.next)

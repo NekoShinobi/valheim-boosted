@@ -4,21 +4,36 @@ Workflows run in [NekoShinobi/valheim-boosted](https://github.com/NekoShinobi/va
 
 ## Create a GitHub release or pre-release
 
-Use GitHub's **release editor** for the large Markdown description box and preview. The **Prepare GitHub release** workflow builds the packages and attaches them to your saved draft; you publish after reviewing the result. GitHub's [workflow inputs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow) have no multiline textarea type, while the [release editor](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) supports writing notes ahead of publication.
+Use GitHub's **release editor** for the large Markdown description box and preview. The **Prepare GitHub release** workflow uses the draft's tag and description to commit version and changelog updates, build the packages, and attach them to your saved draft; you publish after reviewing the result. GitHub's [workflow inputs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow) have no multiline textarea type, while the [release editor](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) supports writing notes ahead of publication.
 
-1. Commit and push the intended code, matching version numbers and changelog to `main`. The workflow must be on the default branch before its **Run workflow** button appears. For the first release, the existing numeric version is `0.1.0`.
-2. Open [Draft a new release](https://github.com/NekoShinobi/valheim-boosted/releases/new). Choose or create the matching tag, such as `0.1.0`, and select its target branch. Enter a title and write the description in the large **Describe this release** box. Check **This is a pre-release** for pre-alpha builds. Tags use plain `Major.Minor.Patch`, without a `v` prefix or `-alpha` suffix.
+1. Commit and push the intended code to `main`. Leave the version files at their current consistent version; preparation updates them automatically. The workflow must be on the default branch before its **Run workflow** button appears.
+2. Open [Draft a new release](https://github.com/NekoShinobi/valheim-boosted/releases/new). Enter an unused version tag (`0.1.0` for the initial release, then a higher version such as `0.2.0`) and select the target **branch**, normally `main`. Enter a title and write the description in the large **Describe this release** box. Check **This is a pre-release** for pre-alpha builds. Tags use plain `Major.Minor.Patch`, without a `v` prefix or `-alpha` suffix. Do not push the tag yourself before preparation.
 3. Click **Save draft**. You can return to edit the description later. Saving alone does not start a build.
 4. Open [Actions → Prepare GitHub release](https://github.com/NekoShinobi/valheim-boosted/actions/workflows/release.yml), select **Run workflow**, use `main` for the workflow branch, and enter the saved draft's tag.
 5. Wait for the full workflow to succeed. Its summary links back to Releases. The draft now contains `valheim-boosted-0.1.0.zip`, `valheim-boosted-0.1.0-plugins.zip`, and `SHA256SUMS`. Review them and click **Publish release** in the editor.
 
 Publication makes the assets downloadable without login on the public repository and starts **Build metrics image**, which publishes `ghcr.io/nekoshinobi/valheim-boosted-metrics:0.1.0` after its checks pass. The image build is separate and may finish after the mod release is published. Both regular releases and pre-releases use this flow; neither uploads to Thunderstore automatically.
 
-Preparation resolves the draft's target to a full commit SHA, runs the existing mod checks/build for that commit, verifies both ZIP layouts and their matching binaries, then attaches the original files with checksums. If the tag already exists, its commit wins over the draft's branch selection. If it does not, preparation creates it at the successfully built commit and pins the draft there. A moving branch therefore cannot make the published source differ from the mod build. The workflow does not bump source versions or replace the packaged `CHANGELOG.md` with your release description; write the GitHub notes as freely as you like.
+Preparation reads the selected branch at a full commit SHA and plans these updates:
 
-Your title, description, and pre-release checkbox remain editable throughout preparation. Leave the tag, target and draft state alone until the workflow finishes. A build failure leaves the draft unpublished. Rerunning preparation replaces only its two named ZIPs and `SHA256SUMS`; other attachments are retained. Published releases are rejected. Attaching before publication also supports [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), where assets become locked when published.
+| File | Automatic change |
+| --- | --- |
+| `mod/ValheimBoosted.csproj` | Set the assembly/package version |
+| `mod/Plugin.cs` | Set `PluginVersion` |
+| `package.json` | Set the dashboard package version |
+| `thunderstore/manifest.json` | Set the Thunderstore package version |
+| `CHANGELOG.md` | Add the new `## vMajor.Minor.Patch` entry using the draft description |
+| `README.md`, `thunderstore/README.md` | Update current version labels and installation ZIP filenames |
 
-No personal token is needed for this flow. The draft lookup and attachment jobs use the repository's `GITHUB_TOKEN` with `contents: write`; the reusable build has `contents: read`. Repository rules must permit tag creation and draft asset updates. Use code already pushed to `main`: GitHub can reject tag creation for a branch with workflow changes that the Actions token cannot authorize. A user publishing through the editor supplies the event that starts the image workflow; creating the tag with `GITHUB_TOKEN` does not trigger additional push workflows.
+After validating all candidate metadata, it appends `chore(release): prepare Major.Minor.Patch` to the target branch using GitHub's [commit API](https://docs.github.com/en/graphql/reference/commits#createcommitonbranch). The API requires the branch head to still match the selected commit; a concurrent push fails preparation instead of overwriting it. The existing mod workflow builds the resulting commit. After its checks pass, preparation verifies both ZIP layouts and matching binaries, creates the tag at that commit, pins the draft there, and uploads the original ZIPs and checksums. Pull the target branch locally afterward to get the automated commit.
+
+Older changelog entries remain intact. If the selected version already has a hand-written entry (including the initial `0.1.0`), preparation retains it and adds the draft notes within that entry. Generated notes are marked with HTML comments so retries update them without duplicating headings. Description headings are nested beneath the version heading; fenced code remains literal. The GitHub description itself is preserved. Dependency versions, tool pins, and lockfiles are unchanged; the current Bun lockfile does not store the root package version.
+
+A failed build leaves the version commit on the branch and the draft unpublished, with no new tag. Rerun preparation after fixing the cause; identical version/notes content creates no extra commit. Editing the description during a build stops attachment: rerun so the changelog and package include those edits. Before a successful attachment, leave the tag, target and draft state alone. Release preparations are serialized across the repository, and version decreases are rejected.
+
+Once a tag exists, retries build its existing commit and validate its versions without changing source or moving the tag. A manually created tag with outdated versions therefore fails: use a new unused tag and branch target for automatic version preparation. After attachment, further edits in the GitHub editor affect the release page; changing the packaged changelog requires a new version. Rerunning preparation replaces only its two named ZIPs and `SHA256SUMS`; other attachments are retained. Published releases are rejected. Attaching before publication also supports [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), where assets become locked when published.
+
+No personal token is needed for repositories that permit the workflow's branch and release writes. The preparation and attachment jobs use `GITHUB_TOKEN` with `contents: write`; the reusable build has `contents: read`. Branch protection, required PR/check rules and tag rules still apply. If they reject the version commit, preparation stops before building or tagging; it does not bypass those rules. Use code already pushed to `main`: GitHub can also reject tag creation for a branch with workflow changes that the Actions token cannot authorize. Commits and tags created with `GITHUB_TOKEN` do not start extra push workflows, so the mod build is called explicitly. A user publishing through the editor supplies the event that starts the image workflow.
 
 ## Mod build
 
@@ -55,11 +70,11 @@ The workflow uses two `actions/upload-artifact` steps with `archive: false`, eac
 
 For subsequent releases:
 
-1. Increase the same numeric version in `thunderstore/manifest.json`, `mod/ValheimBoosted.csproj`, `mod/Plugin.cs`, and `package.json`.
-2. Prepend a `## vMajor.Minor.Patch` section to the root `CHANGELOG.md`; keep older entries below it. Update the README version labels and installation examples.
-3. Keep the same Thunderstore package name and publishing Team. Keep `website_url` pointed at the project repository.
-4. Use the [draft release flow above](#create-a-github-release-or-pre-release) with the matching `Major.Minor.Patch` tag, without a `v` prefix. Preparation checks the tag against the source versions before building. Direct numeric tag pushes remain supported for CI artifact/image builds. The changelog's `## vMajor.Minor.Patch` heading format is separate from Git tag names.
-5. Upload the new ZIP under that same Team. Existing published versions cannot be edited, even for README-only changes.
+1. Use the [draft release flow above](#create-a-github-release-or-pre-release) with a higher unused `Major.Minor.Patch` tag and write its release notes. Preparation commits the source versions, changelog and README version updates automatically.
+2. Keep the same Thunderstore package name and publishing Team. Keep `website_url` pointed at the project repository.
+3. Upload the resulting Thunderstore ZIP under that same Team. Existing published versions cannot be edited, even for README-only changes.
+
+For a fully manual local release, update those same version fields and prepend a `## vMajor.Minor.Patch` changelog section before packaging. Direct numeric tag pushes still trigger CI artifact/image builds, but do not run automatic version preparation. The changelog's heading format is separate from Git tag names.
 
 The package uses `thunderstore/README.md` for a self-contained mod page; the root README includes developer/dashboard links for GitHub. The root changelog is copied unchanged into the ZIP. `thunderstore/icon.svg` is the editable artwork source; `icon.png` is the required 256×256 export. CI uses the checked-in PNG without an image-rendering dependency.
 

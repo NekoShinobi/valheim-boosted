@@ -13,6 +13,32 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 
 
+def markdown_lines(text):
+    """Yield offsets and lines, distinguishing fenced code from Markdown headings."""
+    fence = None
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+        code = fence is not None or marker is not None
+        if marker:
+            run, rest = marker.groups()
+            if fence is None:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence) and not rest.strip():
+                fence = None
+        yield offset, line, code
+        offset += len(line)
+
+
+def release_sections(changelog):
+    sections = []
+    for offset, line, code in markdown_lines(changelog):
+        heading = re.fullmatch(r"## v(\S+)[ \t]*", line.rstrip("\r\n"))
+        if heading and not code:
+            sections.append({"start": offset, "end": offset + len(line), "version": heading[1]})
+    return sections
+
+
 def validate(root=ROOT, tag=None):
     manifest = json.loads((root / "thunderstore/manifest.json").read_text(encoding="utf-8"))
     required = {"name", "version_number", "website_url", "description", "dependencies"}
@@ -45,7 +71,7 @@ def validate(root=ROOT, tag=None):
     if tag is not None and tag != version:
         raise ValueError(f"Release tag must be {version} (without a v prefix), got {tag}")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
-    headings = re.findall(r"^## v(\S+)\s*$", changelog, re.MULTILINE)
+    headings = [s["version"] for s in release_sections(changelog)]
     if not headings or headings[0] != version:
         raise ValueError("CHANGELOG.md must start with a release section for the current version")
     if not all(re.fullmatch(VERSION, v) for v in headings):

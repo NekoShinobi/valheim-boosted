@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Build inputs and draft-only asset attachment for the release-editor workflow."""
 import argparse
+import base64
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,14 @@ import zipfile
 
 TAG = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def version_tools():
+    # Load tooling from the workflow checkout, never execute code from the release target.
+    spec = importlib.util.spec_from_file_location("release_version", Path(__file__).with_name("release-version.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class GitHub:
@@ -37,6 +47,33 @@ class GitHub:
     def upload(self, tag, paths):
         # Arguments, never shell code. User-authored notes never enter this command.
         subprocess.run(["gh", "release", "upload", tag, "--repo", self.repository, "--clobber", *map(str, paths)], check=True)
+
+    def commit_files(self, branch, expected_sha, changes, tag):
+        # GitHub atomically compares the branch head and appends a signed commit.
+        # Protected-branch rules still apply; no force update or rules bypass.
+        query = """mutation($input: CreateCommitOnBranchInput!) {
+          createCommitOnBranch(input: $input) { commit { oid } }
+        }"""
+        payload = {"query": query, "variables": {"input": {
+            "branch": {"repositoryNameWithOwner": self.repository, "refName": f"refs/heads/{branch}"},
+            "expectedHeadOid": expected_sha,
+            "message": {"headline": f"chore(release): prepare {tag}"},
+            "fileChanges": {"additions": [
+                {"path": name, "contents": base64.b64encode(data).decode("ascii")}
+                for name, data in sorted(changes.items())
+            ]},
+        }}}
+        result = subprocess.run(["gh", "api", "graphql", "--input", "-"],
+                                input=json.dumps(payload), text=True, capture_output=True, check=False)
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "Release version commit failed")
+        response = json.loads(result.stdout)
+        if response.get("errors"):
+            raise RuntimeError("Release version commit failed: " + json.dumps(response["errors"]))
+        sha = response["data"]["createCommitOnBranch"]["commit"]["oid"]
+        if not SHA.fullmatch(sha):
+            raise ValueError("GitHub returned an invalid release commit")
+        return sha
 
 
 def version(tag):
@@ -91,6 +128,41 @@ def resolve(github, tag):
     return {"sha": sha, "release_id": str(release["id"]), "target": target, "version": release_version}
 
 
+def notes_digest(release):
+    return hashlib.sha256(release["body"].encode("utf-8")).hexdigest()
+
+
+def prepare_source(github, tag, release_id, sha, target, root):
+    release_version = version(tag)
+    if not SHA.fullmatch(sha):
+        raise ValueError("Expected a full source commit SHA")
+    release = draft_only(github.api(f"releases/{release_id}"), tag, release_id)
+    if release["target_commitish"] != target:
+        raise ValueError("Draft target changed; run preparation again")
+    tools = version_tools()
+    existing = tag_commit(github, tag)
+    if existing is not None:
+        if existing != sha:
+            raise ValueError("Tag moved; run preparation again")
+        # Retries after attachment, and manually created tags, rebuild committed files.
+        # Bumping a version at an existing tag would require moving that tag.
+        tools.packager.validate(root, tag=tag)
+    else:
+        branch = github.api(f"git/ref/heads/{quote(target, safe='')}", missing=True)
+        if branch is None:
+            raise ValueError("A new release must target a branch, such as main, so its version changes can be committed")
+        if branch["object"]["type"] != "commit" or branch["object"]["sha"] != sha:
+            raise ValueError("Target branch moved; run preparation again")
+        changes = tools.plan(root, tag, release["body"])
+        latest = draft_only(github.api(f"releases/{release_id}"), tag, release_id)
+        if latest["target_commitish"] != target or notes_digest(latest) != notes_digest(release):
+            raise ValueError("Draft changed while preparing versions; run preparation again")
+        if changes:
+            sha = github.commit_files(target, sha, changes, tag)
+    return {"sha": sha, "release_id": str(release_id), "target": target,
+            "version": release_version, "notes_digest": notes_digest(release)}
+
+
 def checked_assets(directory, tag):
     release_version = version(tag)
     paths = [directory / f"valheim-boosted-{release_version}{suffix}.zip" for suffix in ("", "-plugins")]
@@ -117,7 +189,7 @@ def checked_assets(directory, tag):
     return paths
 
 
-def attach(github, tag, release_id, sha, target, directory):
+def attach(github, tag, release_id, sha, target, directory, expected_notes_digest=None):
     if not SHA.fullmatch(sha):
         raise ValueError("Expected a full source commit SHA")
     paths = checked_assets(directory, tag)
@@ -127,6 +199,8 @@ def attach(github, tag, release_id, sha, target, directory):
         release = draft_only(github.api(endpoint), tag, release_id)
         if release["target_commitish"] not in (target, sha):
             raise ValueError("Draft target changed during the build; run preparation again")
+        if expected_notes_digest is not None and notes_digest(release) != expected_notes_digest:
+            raise ValueError("Draft description changed during the build; run preparation again before publishing")
         return release
 
     check_draft()
@@ -159,20 +233,32 @@ def attach(github, tag, release_id, sha, target, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("resolve", "attach"))
+    parser.add_argument("operation", choices=("resolve", "prepare", "attach"))
     parser.add_argument("--assets", type=Path, default=Path("release-assets"))
+    parser.add_argument("--source", type=Path, default=Path("release-source"))
     args = parser.parse_args()
     try:
         tag = os.environ["RELEASE_TAG"]
         github = GitHub(os.environ["GITHUB_REPOSITORY"])
-        if args.operation == "resolve":
-            values = resolve(github, tag)
+        if args.operation in ("resolve", "prepare"):
+            if args.operation == "resolve":
+                values = resolve(github, tag)
+                summary = f"Selected `{tag}` from `{values['sha']}`. Preparing source versions and changelog next.\n"
+            else:
+                source_sha = os.environ["RELEASE_SHA"]
+                checkout = subprocess.run(["git", "-C", str(args.source), "rev-parse", "HEAD"],
+                                          text=True, capture_output=True, check=True).stdout.strip()
+                if checkout != source_sha:
+                    raise ValueError("Source checkout does not match the selected release commit")
+                values = prepare_source(github, tag, int(os.environ["RELEASE_ID"]), source_sha,
+                                        os.environ["RELEASE_TARGET"], args.source)
+                summary = f"Versions and changelog ready for `{tag}`. Building commit [`{values['sha']}`](https://github.com/{github.repository}/commit/{values['sha']}).\n"
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                 for key, value in values.items():
                     output.write(f"{key}={value}\n")
-            summary = f"Building `{tag}` from `{values['sha']}`. Your saved title, Markdown notes and pre-release choice will be preserved.\n"
         else:
-            result = attach(github, tag, int(os.environ["RELEASE_ID"]), os.environ["RELEASE_SHA"], os.environ["RELEASE_TARGET"], args.assets)
+            result = attach(github, tag, int(os.environ["RELEASE_ID"]), os.environ["RELEASE_SHA"],
+                            os.environ["RELEASE_TARGET"], args.assets, os.environ["RELEASE_NOTES_DIGEST"])
             kind = "pre-release" if result["prerelease"] else "release"
             summary = f"Both installation ZIPs and `SHA256SUMS` are attached to the **{kind} draft** for `{tag}` at `{os.environ['RELEASE_SHA']}`.\n\nReview the draft and select **Publish release** when ready. Publishing starts the versioned metrics-image workflow.\n"
         summary += f"\n[Open releases and drafts](https://github.com/{github.repository}/releases)\n"

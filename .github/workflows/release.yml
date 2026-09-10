@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Saved draft tag (for example 0.1.0, without a v prefix). Write notes and choose pre-release in Releases → Draft a new release first.'
+        description: 'Saved draft tag (for example 0.1.0, without a v prefix). Preparation commits versions and changelog to the draft target branch before building.'
         required: true
         type: string
 
@@ -13,21 +13,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  # Version commits for different drafts must not race on the same target branch.
+  group: release-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   draft:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # GitHub only lists unpublished drafts for callers with repository push access.
+    timeout-minutes: 10
+    # Read drafts and commit version/changelog changes to their target branch.
     permissions:
       contents: write
     outputs:
-      sha: ${{ steps.draft.outputs.sha }}
+      sha: ${{ steps.prepare.outputs.sha }}
       release_id: ${{ steps.draft.outputs.release_id }}
       target: ${{ steps.draft.outputs.target }}
       version: ${{ steps.draft.outputs.version }}
+      notes_digest: ${{ steps.prepare.outputs.notes_digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,6 +40,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: python3 scripts/prepare-release.py resolve
+      - name: Read the selected release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.draft.outputs.sha }}
+          path: release-source
+          persist-credentials: false
+      - name: Commit release versions and changelog
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_SHA: ${{ steps.draft.outputs.sha }}
+          RELEASE_TARGET: ${{ steps.draft.outputs.target }}
+        run: python3 scripts/prepare-release.py prepare --source release-source
 
   mod:
     needs: draft
@@ -72,4 +89,5 @@ jobs:
           RELEASE_ID: ${{ needs.draft.outputs.release_id }}
           RELEASE_SHA: ${{ needs.draft.outputs.sha }}
           RELEASE_TARGET: ${{ needs.draft.outputs.target }}
+          RELEASE_NOTES_DIGEST: ${{ needs.draft.outputs.notes_digest }}
         run: python3 scripts/prepare-release.py attach --assets release-assets
