@@ -4,5 +4,6 @@
 <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
 <Compile Include="../../mod/IntegrationState.cs" Link="IntegrationState.cs" />
 <Compile Include="../../mod/TelemetryIntegration.cs" Link="TelemetryIntegration.cs" />
-<Reference Include="0Harmony"><HintPath>../../.local/references/ModLibraries/0Harmony.dll</HintPath></Reference>
-</ItemGroup></Project>
+</ItemGroup>
+<Import Project="../HarmonyRuntime.props" />
+</Project>

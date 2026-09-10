@@ -8,6 +8,8 @@ Workflows run in [NekoShinobi/valheim-boosted](https://github.com/NekoShinobi/va
 
 The Thunderstore ZIP contains root-level manifest.json, icon.png (256×256), README.md, and CHANGELOG.md, plus our DLL/PDB under BepInEx/plugins/ValheimBoosted and optional CI reference hashes. Game/framework DLLs and decompiled sources are excluded. BepInEx/Jötunn are runtime prerequisites, not bundled copies. Steam's public branch can change; reference hashes in each CI artifact record what that build used. The local build uses the installed client snapshot, while CI exercises dedicated-server compilation. Actual dedicated-server runtime behavior still needs an in-game check.
 
+The Mono test executables require Harmony's runtime dependencies as well as `0Harmony.dll`: `MonoMod.RuntimeDetour.dll`, `MonoMod.Utils.dll`, and `Mono.Cecil.dll`. Reference preparation extracts these from the same checksum-verified BepInEx archive. Both test projects import `tests/HarmonyRuntime.props`, which checks for the files and copies them into fresh test outputs. These dependencies remain private test/build inputs and are not added to the mod ZIP.
+
 The first run needs access to Steam CDN/SteamCMD and Thunderstore. No Steam account secrets or private game-assembly uploads are required. SteamCMD completes a separate self-update first, then the Linux server installation is retried up to three times with ten-second delays. Each install attempt has a seven-minute timeout. A successful exit and a nonempty dedicated-server assembly are both required before compilation. Persistent Steam/CDN failures still fail the build; retries do not silently accept missing references.
 
 ## Thunderstore releases

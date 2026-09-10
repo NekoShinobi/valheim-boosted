@@ -13,6 +13,6 @@
     <Reference Include="$(GameReferences)/assembly_*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameReferences)/UnityEngine*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameReferences)/com.rlabrecque.steamworks.net.dll"><Private>false</Private></Reference>
-    <Reference Include="0Harmony"><HintPath>../../.local/references/ModLibraries/0Harmony.dll</HintPath></Reference>
   </ItemGroup>
+  <Import Project="../HarmonyRuntime.props" />
 </Project>

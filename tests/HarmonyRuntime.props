@@ -1,0 +1,15 @@
+<Project>
+  <ItemGroup>
+    <HarmonyRuntimeAssembly Include="$(MSBuildThisFileDirectory)../.local/references/ModLibraries/0Harmony.dll" />
+    <HarmonyRuntimeAssembly Include="$(MSBuildThisFileDirectory)../.local/references/ModLibraries/MonoMod.RuntimeDetour.dll" />
+    <HarmonyRuntimeAssembly Include="$(MSBuildThisFileDirectory)../.local/references/ModLibraries/MonoMod.Utils.dll" />
+    <HarmonyRuntimeAssembly Include="$(MSBuildThisFileDirectory)../.local/references/ModLibraries/Mono.Cecil.dll" />
+    <Reference Include="@(HarmonyRuntimeAssembly)">
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckHarmonyRuntime" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('%(HarmonyRuntimeAssembly.Identity)')"
+           Text="Missing Harmony runtime dependency: %(HarmonyRuntimeAssembly.Filename)%(HarmonyRuntimeAssembly.Extension). Run scripts/prepare-ci.py or scripts/dev.py setup before building these tests." />
+  </Target>
+</Project>
