@@ -1,11 +1,11 @@
-FROM oven/bun:1.4.0 AS build
+FROM oven/bun:1.4.2 AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY dashboard ./dashboard
 RUN bun run check && bun run build
 
-FROM oven/bun:1.4.0 AS runtime
+FROM oven/bun:1.4.2 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 TELEMETRY_PATH=/telemetry/snapshot.json REPORTS_DIRECTORY=/reports HISTORY_RETENTION_DAYS=7
 USER root
