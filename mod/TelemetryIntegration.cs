@@ -31,15 +31,20 @@ internal sealed class TelemetryIntegration : IDisposable
         }
         catch (Exception ex) { Compatibility.status = "inspection_failed:" + ex.GetType().Name; }
         log($"Compatibility: {Compatibility.status}; game={Compatibility.gameVersion}; protocol={Compatibility.networkVersion}; module={Compatibility.gameModuleId}");
-        foreach (string id in new[] { "FrameTiming", "GameCounters", "NetworkTiming", "ZdoReceive", "SteamTransport", "Ownership" })
+        foreach (string id in new[] { "FrameTiming", "GameCounters", "NetworkTiming", "ZdoReceive", "SteamTransport", "Ownership", "ConnectionHealth", "ProcessResources" })
         {
             bool enabled = config.Bind("Features", id, true, "Enable this diagnostic probe. Restart required; no gameplay tuning.").Value;
             Features[id] = new FeatureStatus { id = id, enabled = enabled,
-                status = !enabled ? "configured_disabled" : id != "FrameTiming" && !GameSupported ? "blocked_compatibility" : "available" };
+                status = !enabled ? "configured_disabled" : id != "FrameTiming" && id != "ProcessResources" && !GameSupported ? "blocked_compatibility" : "available" };
         }
         if (Features["SteamTransport"].Collect)
         {
-            try { Compatibility.steamInterface = SteamMetrics.Initialize(); }
+            try
+            {
+                Compatibility.steamInterface = SteamMetrics.Initialize();
+                Features["SteamTransport"].target = Compatibility.steamInterface + ".GetConnectionRealTimeStatus";
+                Features["SteamTransport"].detail = "Contract verified; awaiting a connected Steam peer";
+            }
             catch (Exception ex) { Fail("SteamTransport", "contract_mismatch", ex.Message); }
         }
         if (Features["Ownership"].Collect)

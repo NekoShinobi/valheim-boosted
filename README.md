@@ -3,21 +3,44 @@
 <h1 align="center">valheim-boosted</h1>
 <p align="center"><strong>See what your connection is doing.</strong><br>0.1.0 · Pre-alpha · Valheim networking diagnostics</p>
 
-An in-game diagnostics HUD and a live server dashboard, built to help explain lag with measurements. This pre-alpha collects data; automatic tuning and simulation ownership changes are future work.
+An in-game diagnostics HUD and a live server dashboard, built to help explain lag with measurements. This pre-alpha collects data and enables fair replication scheduling by default for dedicated Steam servers. Automatic transport tuning and simulation ownership changes remain future work.
 
 | Play with context | See the server |
 | --- | --- |
 | **F8 HUD** with a configurable corner | **Per-peer views** of latency, queues, and traffic |
 | **Local timings** for frames and network updates | **Ownership counts** and bounded history charts |
 | **Available transport metrics**, clearly labeled | **Freshness indicators** for missing or stale telemetry |
+| **Experimental fair scheduling** | **Saved reports** and before/after comparisons |
 
 ## Install the mod
 
-Import `valheim-boosted-0.1.0.zip` into a Valheim profile in r2modman or Thunderstore Mod Manager, with **BepInExPack Valheim** and **Jötunn** installed. For manual installation, copy the ZIP's `BepInEx/plugins/ValheimBoosted` folder into your profile's `BepInEx/plugins/` directory.
+Import `valheim-boosted-0.1.0.zip` into a Valheim profile in r2modman or Thunderstore Mod Manager, with **BepInExPack Valheim** and **Jötunn** installed.
+
+For a manual Linux installation, download **`valheim-boosted-0.1.0-plugins.zip`**, stop the server, and extract directly into its plugins directory:
+
+```sh
+unzip -o valheim-boosted-0.1.0-plugins.zip -d /path/to/BepInEx/plugins
+```
+
+For `valheim-server-docker`, use `/path/to/host/config/bepinex/plugins` as the destination, where that host config directory is mounted at `/config`. Both packages require BepInEx and Jötunn.
 
 Enter a world and press **F8**. The HUD starts at the top right; configure it in `BepInEx/config/valheim.boosted.cfg`. Install on the server for server metrics and on each client that wants its own HUD. Client CPU reporting to the server is not yet implemented.
 
 [Installation & configuration](docs/MOD-INSTALL.md) · [Changelog](CHANGELOG.md) · [Metric definitions](docs/OBSERVABILITY.md) · [Compatibility & switches](docs/COMPATIBILITY.md)
+
+## Experimental fair scheduler
+
+Stage 2 is enabled by default for dedicated Steam servers. New configs generate these settings in `valheim.boosted.cfg`. Existing configs retain their saved values; edit and restart to change them:
+
+```ini
+[Scheduling]
+Enabled = true
+MaxCallsPerFrame = 4
+TimeBudgetMs = 2
+MaxDebtPerPeer = 2
+```
+
+Set `Enabled = false` and restart to use vanilla scheduling or collect a baseline. The scheduler targets fair 20 Hz send opportunities with bounded catch-up work. It preserves vanilla packet formats and queue limits. The dashboard shows service age, scheduler work, process CPU/RSS, heartbeat age, queue growth, frame tails and save timings. [Behavior, fallback & testing →](docs/SCHEDULING.md)
 
 ## Start the metrics server
 
@@ -36,11 +59,11 @@ HOST=127.0.0.1 PORT=8080 \
   bun start
 ```
 
-This example reads the development profile. For another server, set `TELEMETRY_PATH` to its snapshot path **as seen by the Bun process**. The page shows **Waiting** until the mod exports a snapshot.
+This example reads the development profile. Set the mod's `[Telemetry] ExportPath` to the same absolute development-profile path first; its default is `/config/valheim-boosted/telemetry/snapshot.json`. For another server, set `TELEMETRY_PATH` to its snapshot path **as seen by the Bun process**. The page shows **Waiting** until the mod exports a snapshot.
 
 ### Run with Docker
 
-For a Valheim container with `/srv/valheim/config:/config` mounted, set this in the mod's `valheim.boosted.cfg`, then restart Valheim:
+For a Valheim container with `/srv/valheim/config:/config` mounted, new configs use these defaults. Existing configs retain their saved values: update `/config/bepinex/valheim.boosted.cfg` to match, then restart Valheim:
 
 ```ini
 [Telemetry]
@@ -66,11 +89,15 @@ docker run -d --name valheim-boosted-metrics --restart unless-stopped \
   -e HOST=0.0.0.0 -e PORT=8080 \
   -e TELEMETRY_PATH=/telemetry/snapshot.json \
   -e HISTORY_SAMPLES=300 -e STALE_AFTER_MS=5000 \
+  -e REPORTS_DIRECTORY=/reports \
   --mount type=bind,source=/srv/valheim/config/valheim-boosted/telemetry,target=/telemetry,readonly \
+  --mount type=volume,source=valheim-boosted-reports,target=/reports \
   valheim-boosted-metrics:local
 ```
 
 Mount the **whole directory** read-only: the mod replaces `snapshot.json` atomically, so mounting only the file can leave the reader seeing an old snapshot. `HOST=0.0.0.0` lets Docker reach Bun inside the container; the port mapping exposes it only on the host's loopback interface.
+
+The writable `valheim-boosted-reports` volume preserves saved reports when the metrics container is replaced. The Compose example also includes a reports volume. If using a host bind mount for `/reports`, make it writable by the image's `bun` user.
 
 Or use the included Compose file:
 
@@ -89,11 +116,20 @@ TELEMETRY_DIRECTORY=/srv/valheim/config/valheim-boosted/telemetry \
 | `PORT` | `8080` | HTTP port; match Docker's container-port mapping if changed |
 | `TELEMETRY_PATH` | Development-profile path above; `/telemetry/snapshot.json` in Docker | JSON snapshot to read |
 | `HISTORY_SAMPLES` | `300` | Keep 1–3600 snapshots in memory; resets on restart or world/process change |
+| `REPORTS_DIRECTORY` | `.local/reports`; `/reports` in Docker | Persistent JSON reports; use a writable volume in Docker |
 | `STALE_AFTER_MS` | `5000` | Minimum stale threshold, 1000–300000 ms; extended to three sample intervals |
 
 Open [localhost:8080](http://127.0.0.1:8080) on the host. For an SSH host, forward port 8080 in VS Code's **Ports** panel. The service has no built-in authentication; use an access-controlled reverse proxy if exposing it beyond localhost.
 
 [API details & deployment notes →](dashboard/README.md)
+
+### Compare a networking change
+
+1. On the overview, **Reset stats** after warm-up, run a repeatable scenario, name the recording and **Save report**.
+2. Apply your change, restart Valheim if required, reset stats and repeat with the same world, player count, activity and duration.
+3. Open **Compare reports** to choose a baseline and candidate, review measurement coverage and settings, and download either report as JSON.
+
+Reset affects the dashboard's unsaved aggregates and live charts for all viewers; it does not reset Valheim's counters or delete saved reports. Recording pauses when the game session or exported settings change. Unsaved recordings are lost when the metrics service restarts. [Report definitions and limitations →](docs/REPORTS.md)
 
 ## Develop
 

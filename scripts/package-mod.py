@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate release metadata and build a Thunderstore-compatible BepInEx ZIP."""
+"""Validate release metadata and build Thunderstore and direct plugin-install ZIPs."""
 import argparse
 import json
 import os
@@ -62,24 +62,26 @@ def validate(root=ROOT, tag=None):
     return manifest
 
 
-def package(root=ROOT, tag=None):
+def package(root=ROOT, tag=None, plugins_only=False):
     manifest = validate(root, tag)
     version = manifest["version_number"]
-    files = {
+    files = {} if plugins_only else {
         "manifest.json": root / "thunderstore/manifest.json",
         "icon.png": root / "thunderstore/icon.png",
         "README.md": root / "thunderstore/README.md",
         "CHANGELOG.md": root / "CHANGELOG.md",
     }
+    plugin_directory = "ValheimBoosted/" if plugins_only else "BepInEx/plugins/ValheimBoosted/"
     for name in ("ValheimBoosted.dll", "ValheimBoosted.pdb"):
-        files["BepInEx/plugins/ValheimBoosted/" + name] = root / "mod/bin/Release/net48" / name
+        files[plugin_directory + name] = root / "mod/bin/Release/net48" / name
     provenance = root / ".local/references/ci-provenance.json"
     if provenance.exists():
-        files["build-references.json"] = provenance
+        files[(plugin_directory if plugins_only else "") + "build-references.json"] = provenance
     for source in files.values():
         if not source.is_file():
             raise ValueError(f"Missing package input: {source}. Build Release before packaging.")
-    output = root / "artifacts" / f"valheim-boosted-{version}.zip"
+    suffix = "-plugins" if plugins_only else ""
+    output = root / "artifacts" / f"valheim-boosted-{version}{suffix}.zip"
     output.parent.mkdir(exist_ok=True)
     temporary = output.with_suffix(".zip.tmp")
     try:
@@ -109,9 +111,12 @@ if __name__ == "__main__":
             print(f"Thunderstore metadata valid: {manifest['name']} {manifest['version_number']}")
         else:
             output = package(tag=tag)
+            plugins_output = package(tag=tag, plugins_only=True)
             print(output)
+            print(plugins_output)
             if os.environ.get("GITHUB_OUTPUT"):
                 with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
                     stream.write(f"package_path={output.relative_to(ROOT).as_posix()}\n")
+                    stream.write(f"plugins_package_path={plugins_output.relative_to(ROOT).as_posix()}\n")
     except (ValueError, OSError, KeyError) as exc:
         parser.exit(1, f"Packaging failed: {exc}\n")

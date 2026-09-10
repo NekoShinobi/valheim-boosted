@@ -14,6 +14,8 @@ internal sealed class TelemetryCollector
         public double? previousRtt;
         public double? lastBatchAt;
         public int batches;
+        public long? previousQueue;
+        public double? queueNonemptySince;
     }
 
     private static readonly FieldInfo Instances = AccessTools.Field(typeof(ZNetScene), "m_instances");
@@ -28,12 +30,16 @@ internal sealed class TelemetryCollector
     private double lastSampleAt;
     private long sequence;
     private int fixedUpdates;
+    private int frames50, frames100;
+    private readonly ResourceSampler resources = new ResourceSampler();
     private readonly TelemetryIntegration integration;
+    private readonly MeasurementDiagnostics diagnostics;
     public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
-    public TelemetryCollector(TelemetryIntegration integration)
+    public TelemetryCollector(TelemetryIntegration integration, Action<string> warning)
     {
         this.integration = integration;
+        diagnostics = new MeasurementDiagnostics(warning);
         lastFrameAt = lastSampleAt = Now;
         for (int i = 0; i < previousGc.Length; i++) previousGc[i] = GC.CollectionCount(i);
     }
@@ -42,7 +48,10 @@ internal sealed class TelemetryCollector
     {
         double now = Now;
         if (integration.Features["FrameTiming"].Collect)
-            frames.Add((now - lastFrameAt) * 1000);
+            {
+            double ms = (now - lastFrameAt) * 1000;
+            frames.Add(ms); if (ms >= 50) frames50++; if (ms >= 100) frames100++;
+        }
         lastFrameAt = now;
     }
 
@@ -65,6 +74,7 @@ internal sealed class TelemetryCollector
             peerStates.Clear();
             previousNet = net;
         }
+        ReplicationIntegration.Current?.RefreshWorld(ZDOMan.instance);
         bool isServer = net && net.IsServer();
         var snapshot = new TelemetrySnapshot
         {
@@ -80,6 +90,9 @@ internal sealed class TelemetryCollector
             networkTimingStatus = integration.Features["NetworkTiming"].status,
             zdoReceiveStatus = integration.Features["ZdoReceive"].status,
             fixedUpdates = fixedUpdates,
+            longFrames50Ms = integration.Features["FrameTiming"].Collect ? (int?)frames50 : null,
+            longFrames100Ms = integration.Features["FrameTiming"].Collect ? (int?)frames100 : null,
+            resources = integration.Features["ProcessResources"].Collect ? resources.Capture(now) : null,
             fixedStepSeconds = UnityEngine.Time.fixedDeltaTime,
             managedMemoryBytes = GC.GetTotalMemory(false),
             gcCollections = new int[3],
@@ -90,10 +103,11 @@ internal sealed class TelemetryCollector
             snapshot.gcCollections[i] = current - previousGc[i];
             previousGc[i] = current;
         }
-        fixedUpdates = 0;
+        fixedUpdates = 0; frames50 = frames100 = 0;
         lastSampleAt = now;
         var peers = new List<PeerMetrics>();
         var live = new HashSet<ZRpc>();
+        int transportAttempts = 0, transportFailures = 0;
         if (net && integration.GameSupported)
         {
             foreach (var peer in net.GetPeers())
@@ -112,13 +126,52 @@ internal sealed class TelemetryCollector
                     measurementStatus = "unsupported_transport",
                 };
                 state.batches = 0;
+                metrics.replication = ReplicationIntegration.Current?.Take(peer.m_rpc, now);
+                metrics.connectionHealthStatus = integration.Features["ConnectionHealth"].status;
+                if (integration.Features["ConnectionHealth"].Collect)
+                {
+                    try
+                    {
+                        metrics.heartbeatAgeSeconds = Math.Max(0, peer.m_rpc.GetTimeSinceLastPing());
+                        metrics.connectionHealthStatus = "available";
+                        if (peer.m_socket is ZSteamSocket managedSocket) SteamMetrics.ReadManagedQueue(managedSocket, metrics);
+                        if (metrics.applicationQueuedBytes.HasValue)
+                        {
+                            long bytes = metrics.applicationQueuedBytes.Value;
+                            if (bytes > 0 && !state.queueNonemptySince.HasValue) state.queueNonemptySince = now;
+                            if (bytes == 0) state.queueNonemptySince = null;
+                            metrics.applicationQueueNonemptySeconds = bytes > 0 ? now - state.queueNonemptySince.Value : 0;
+                            if (state.previousQueue.HasValue && snapshot.sampleWindowSeconds > 0)
+                                metrics.applicationQueueGrowthBytesPerSecond = (bytes - state.previousQueue.Value) / snapshot.sampleWindowSeconds;
+                            state.previousQueue = bytes;
+                        }
+                        else state.previousQueue = null;
+                    }
+                    catch (Exception ex) { state.previousQueue = null; metrics.connectionHealthStatus = "unavailable:" + ex.GetType().Name; }
+                }
                 try
                 {
                     if (!integration.Features["SteamTransport"].Collect) metrics.measurementStatus = integration.Features["SteamTransport"].status;
-                    else if (metrics.connected && peer.m_socket is ZSteamSocket steam) SteamMetrics.Read(steam, metrics);
+                    else if (metrics.connected && peer.m_socket is ZSteamSocket steam)
+                    {
+                        transportAttempts++;
+                        SteamMetrics.Read(steam, metrics);
+                        if (metrics.measurementStatus != "available")
+                        {
+                            transportFailures++;
+                            diagnostics.Warn($"Steam telemetry unavailable; peer session={metrics.peerSessionId}; {metrics.measurementStatus}", now);
+                        }
+                    }
                     else if (!metrics.connected) metrics.measurementStatus = "disconnected";
                 }
-                catch (Exception ex) { metrics.measurementStatus = "unavailable:" + ex.GetType().Name; }
+                catch (Exception ex)
+                {
+                    transportFailures++;
+                    metrics.measurementError = diagnostics.Capture(ex,
+                        integration.Features["SteamTransport"].target ?? "Steam transport query",
+                        $"Steam telemetry failed; peer session={metrics.peerSessionId}; role={snapshot.role}", now);
+                    metrics.measurementStatus = "unavailable:" + metrics.measurementError.exceptionType;
+                }
                 if (metrics.rttMs.HasValue && state.previousRtt.HasValue)
                     metrics.rttSampleDeltaMs = Math.Abs(metrics.rttMs.Value - state.previousRtt.Value);
                 state.previousRtt = metrics.rttMs;
@@ -129,10 +182,18 @@ internal sealed class TelemetryCollector
             if (!live.Contains(rpc)) peerStates.Remove(rpc);
         snapshot.peers = peers.ToArray();
         snapshot.readyPeers = peers.Count;
+        snapshot.scheduler = ReplicationIntegration.Current?.Snapshot(live);
+        MeasurementDiagnostics.UpdateTransport(integration.Features["SteamTransport"], transportAttempts, transportFailures);
         var zdos = ZDOMan.instance;
         if (net && zdos != null && integration.Features["GameCounters"].Collect)
         {
             snapshot.knownZdos = zdos.NrOfObjects();
+            snapshot.worldSaving = net.IsSaving();
+            if (net.SaveDoneTime >= net.SaveThreadStartTime && net.SaveThreadStartTime >= net.SaveStartTime && net.SaveStartTime > 0)
+            {
+                snapshot.lastSaveDurationMs = (net.SaveDoneTime - net.SaveStartTime) * 1000;
+                snapshot.lastSavePreparationMs = (net.SaveThreadStartTime - net.SaveStartTime) * 1000;
+            }
             snapshot.zdosSentLastGameSecond = zdos.GetSentZDOs();
             snapshot.zdosReceivedLastGameSecond = zdos.GetRecvZDOs();
             if (!isServer) snapshot.clientChangedZdos = zdos.GetClientChangeQueue();
@@ -191,5 +252,9 @@ internal static class TelemetryHooks
         return __exception;
     }
 
-    internal static void AfterZdoData(ZRpc __0) => Integration?.Observe("ZdoReceive", () => Collector?.ReceivedBatch(__0));
+    internal static void AfterZdoData(ZRpc __0, ZPackage __1) => Integration?.Observe("ZdoReceive", () =>
+    {
+        Collector?.ReceivedBatch(__0);
+        ReplicationIntegration.Current?.Received(__0, __1.Size());
+    });
 }

@@ -7,6 +7,14 @@ public sealed class TelemetrySnapshot
 {
     public int schemaVersion = 1;
     public string modVersion = Plugin.PluginVersion;
+    public string modBuildId = typeof(TelemetrySnapshot).Module.ModuleVersionId.ToString();
+    public SchedulerMetrics scheduler;
+    public ResourceMetrics resources;
+    public int? longFrames50Ms;
+    public int? longFrames100Ms;
+    public bool? worldSaving;
+    public double? lastSaveDurationMs;
+    public double? lastSavePreparationMs;
     public CompatibilityInfo compatibility;
     public FeatureStatus[] features;
     public string processSession;
@@ -43,6 +51,7 @@ public sealed class TimingSummary
     public int percentileSamples;
     public double? mean;
     public double? p95;
+    public double? p99;
     public double? max;
 }
 
@@ -58,7 +67,14 @@ public sealed class PeerMetrics
     public string peerSessionId;
     public string transport;
     public bool connected;
+    public string connectionHealthStatus;
+    public double? heartbeatAgeSeconds;
+    public int? applicationQueuedPackets;
+    public double? applicationQueueNonemptySeconds;
+    public double? applicationQueueGrowthBytesPerSecond;
+    public ReplicationMetrics replication;
     public string measurementStatus;
+    public MeasurementError measurementError;
     public double? rttMs;
     public double? rttSampleDeltaMs;
     public double? localDeliveryQuality;
@@ -74,6 +90,54 @@ public sealed class PeerMetrics
     public int? estimatedSendRateBytesPerSecond;
     public double? lastZdoBatchReceivedAgoSeconds;
     public int zdoBatchesReceivedInWindow;
+}
+
+public sealed class SchedulerMetrics
+{
+    public string status;
+    public bool enabled;
+    public int targetHz = 20;
+    public int maxCallsPerFrame;
+    public double budgetMs;
+    public int debtCap;
+    public int eligiblePeers;
+    public double pendingDebt;
+    public int calls;
+    public int timeLimitedFrames;
+    public int workLimitedFrames;
+    public double discardedDebt;
+    public TimingSummary frameWorkMs;
+}
+
+public sealed class ReplicationMetrics
+{
+    public int sendAttempts;
+    public int sentBatches;
+    public int noDataOrDeferred;
+    public int sendFailures;
+    public long sentZdos;
+    public long? receivedPayloadBytes;
+    public double? serviceAgeSeconds;
+    public double? sendAgeSeconds;
+    public TimingSummary sendDurationMs;
+    public TimingSummary serviceIntervalMs;
+}
+
+public sealed class ResourceMetrics
+{
+    public string status;
+    public double? cpuPercentOneCore;
+    public long? residentBytes;
+    public int? threads;
+    public int processorCount;
+}
+
+public sealed class MeasurementError
+{
+    public string exceptionType;
+    public string message;
+    public string operation;
+    public string exceptionChain;
 }
 
 internal sealed class SampleWindow
@@ -104,6 +168,7 @@ internal sealed class SampleWindow
             result.mean = sum / count;
             result.max = maximum;
             result.p95 = sorted[Math.Max(0, (int)Math.Ceiling(n * 0.95) - 1)];
+            result.p99 = sorted[Math.Max(0, (int)Math.Ceiling(n * 0.99) - 1)];
         }
         count = 0;
         sum = maximum = 0;

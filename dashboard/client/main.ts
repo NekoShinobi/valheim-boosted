@@ -1,5 +1,5 @@
 import { mount } from 'svelte';
-import App from './App.svelte';
 import './style.css';
 
-mount(App, { target: document.getElementById('app')! });
+const { default: Page } = await (location.pathname === '/reports' ? import('./Reports.svelte') : import('./App.svelte'));
+mount(Page, { target: document.getElementById('app')! });

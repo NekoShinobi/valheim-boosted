@@ -6,7 +6,10 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../mod/FairScheduler.cs" Link="FairScheduler.cs" />
+    <Compile Include="../../mod/ResourceSampler.cs" Link="ResourceSampler.cs" />
     <Compile Include="../../mod/IntegrationState.cs" Link="IntegrationState.cs" />
+    <Compile Include="../../mod/MeasurementDiagnostics.cs" Link="MeasurementDiagnostics.cs" />
     <Compile Include="../../mod/TelemetryModel.cs" Link="TelemetryModel.cs" />
     <Compile Include="../../mod/SnapshotExporter.cs" Link="SnapshotExporter.cs" />
   </ItemGroup>

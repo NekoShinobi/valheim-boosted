@@ -1,8 +1,17 @@
+import type { RecordingView } from './reports';
+
 export interface Peer {
   peerSessionId: string;
   transport: string;
   connected: boolean;
+  connectionHealthStatus?: string | null;
+  heartbeatAgeSeconds?: number | null;
+  applicationQueuedPackets?: number | null;
+  applicationQueueNonemptySeconds?: number | null;
+  applicationQueueGrowthBytesPerSecond?: number | null;
+  replication?: Replication | null;
   measurementStatus: string;
+  measurementError?: { exceptionType: string; message: string; operation: string; exceptionChain: string } | null;
   rttMs: number | null;
   rttSampleDeltaMs: number | null;
   localDeliveryQuality: number | null;
@@ -25,10 +34,34 @@ export interface Timing {
   percentileSamples: number;
   mean: number | null;
   p95: number | null;
+  p99?: number | null;
   max: number | null;
 }
 
+export interface Replication {
+  sendAttempts: number; sentBatches: number; noDataOrDeferred: number; sendFailures: number;
+  sentZdos: number; receivedPayloadBytes: number | null;
+  serviceAgeSeconds: number | null; sendAgeSeconds: number | null;
+  sendDurationMs: Timing | null; serviceIntervalMs: Timing | null;
+}
+export interface Scheduler {
+  enabled: boolean; status: string; targetHz: number; maxCallsPerFrame: number; budgetMs: number;
+  debtCap: number; eligiblePeers: number; pendingDebt: number; calls: number;
+  timeLimitedFrames: number; workLimitedFrames: number; discardedDebt: number; frameWorkMs: Timing | null;
+}
+export interface Resources {
+  status: string; cpuPercentOneCore: number | null; residentBytes: number | null;
+  threads: number | null; processorCount: number;
+}
 export interface Snapshot {
+  modBuildId?: string | null;
+  scheduler?: Scheduler | null;
+  resources?: Resources | null;
+  longFrames50Ms?: number | null;
+  longFrames100Ms?: number | null;
+  worldSaving?: boolean | null;
+  lastSaveDurationMs?: number | null;
+  lastSavePreparationMs?: number | null;
   compatibility?: { gameVersion: string | null; networkVersion: number | null; gameModuleId: string | null; status: string; steamInterface: string | null } | null;
   features?: { id: string; enabled: boolean; status: string; detail: string | null; target: string | null; invocations: number }[] | null;
   schemaVersion: 1;
@@ -55,6 +88,8 @@ export interface HistoryPoint {
   at: number;
   frameP95: number | null;
   networkP95: number | null;
+  cpuPercentOneCore?: number | null;
+  maxServiceAgeMs?: number | null;
   peers: Pick<Peer, 'peerSessionId' | 'rttMs' | 'estimatedTransportQueueMs' | 'outgoingBytesPerSecond' | 'incomingBytesPerSecond'>[];
 }
 export interface MetricsResponse {
@@ -63,12 +98,13 @@ export interface MetricsResponse {
   lastReadAtUtc: string | null;
   snapshot: Snapshot | null;
   history: HistoryPoint[];
+  recording: RecordingView;
 }
 
 const object = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const number = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
 const nullableNumber = (x: unknown) => x === null || number(x);
-const timing = (x: unknown) => x === null || (object(x) && number(x.samples) && number(x.percentileSamples) && ['mean', 'p95', 'max'].every(k => nullableNumber(x[k])));
+const timing = (x: unknown) => x === null || (object(x) && number(x.samples) && number(x.percentileSamples) && ['mean', 'p95', 'max'].every(k => nullableNumber(x[k])) && (x.p99 == null || number(x.p99)));
 const peerNumbers = ['rttMs', 'rttSampleDeltaMs', 'localDeliveryQuality', 'remoteDeliveryQuality', 'outgoingBytesPerSecond', 'incomingBytesPerSecond', 'outstandingBytes', 'applicationQueuedBytes', 'pendingReliableBytes', 'pendingUnreliableBytes', 'sentUnacknowledgedReliableBytes', 'estimatedTransportQueueMs', 'estimatedSendRateBytesPerSecond', 'lastZdoBatchReceivedAgoSeconds'];
 
 export function parseSnapshot(value: unknown): Snapshot {
@@ -87,6 +123,34 @@ export function parseSnapshot(value: unknown): Snapshot {
       || typeof peer.transport !== 'string' || typeof peer.connected !== 'boolean' || typeof peer.measurementStatus !== 'string'
       || !peerNumbers.every(k => nullableNumber(peer[k])) || !number(peer.zdoBatchesReceivedInWindow)) throw new Error('Invalid peer metrics');
     ids.add(peer.peerSessionId);
+    if (!['heartbeatAgeSeconds', 'applicationQueuedPackets', 'applicationQueueNonemptySeconds'].every(k => peer[k] == null || number(peer[k]))
+      || !(peer.applicationQueueGrowthBytesPerSecond == null || typeof peer.applicationQueueGrowthBytesPerSecond === 'number' && Number.isFinite(peer.applicationQueueGrowthBytesPerSecond))
+      || !(peer.connectionHealthStatus == null || typeof peer.connectionHealthStatus === 'string')) throw new Error('Invalid connection health');
+    if (peer.replication != null) {
+      const r = peer.replication;
+      if (!object(r) || !['sendAttempts', 'sentBatches', 'noDataOrDeferred', 'sendFailures', 'sentZdos'].every(k => number(r[k]))
+        || !['receivedPayloadBytes', 'serviceAgeSeconds', 'sendAgeSeconds'].every(k => nullableNumber(r[k]))
+        || !timing(r.sendDurationMs) || !timing(r.serviceIntervalMs)) throw new Error('Invalid replication metrics');
+    }
+    if (peer.measurementError != null) {
+      const error = peer.measurementError;
+      if (!object(error) || !['exceptionType', 'message', 'operation', 'exceptionChain']
+        .every(k => typeof error[k] === 'string' && error[k].length <= 512)) throw new Error('Invalid measurement error');
+    }
+  }
+  if (!(value.modBuildId == null || typeof value.modBuildId === 'string')
+    || !(value.worldSaving == null || typeof value.worldSaving === 'boolean')
+    || !['longFrames50Ms', 'longFrames100Ms', 'lastSaveDurationMs', 'lastSavePreparationMs'].every(k => value[k] == null || number(value[k]))) throw new Error('Invalid runtime metrics');
+  if (value.resources != null) {
+    const r = value.resources;
+    if (!object(r) || typeof r.status !== 'string' || !number(r.processorCount)
+      || !['cpuPercentOneCore', 'residentBytes', 'threads'].every(k => nullableNumber(r[k]))) throw new Error('Invalid resource metrics');
+  }
+  if (value.scheduler != null) {
+    const s = value.scheduler;
+    if (!object(s) || typeof s.status !== 'string' || typeof s.enabled !== 'boolean'
+      || !['targetHz', 'maxCallsPerFrame', 'budgetMs', 'debtCap', 'eligiblePeers', 'pendingDebt', 'calls', 'timeLimitedFrames', 'workLimitedFrames', 'discardedDebt'].every(k => number(s[k]))
+      || !timing(s.frameWorkMs)) throw new Error('Invalid scheduler metrics');
   }
   if (value.loadedOwnership !== null && (!Array.isArray(value.loadedOwnership) || value.loadedOwnership.length > 10000
     || !value.loadedOwnership.every(x => object(x) && typeof x.ownerSessionId === 'string' && number(x.objects)))) throw new Error('Invalid ownership metrics');

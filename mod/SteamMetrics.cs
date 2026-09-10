@@ -62,13 +62,21 @@ internal static class SteamMetrics
         long queueMicroseconds = (long)status.m_usecQueueTime;
         metrics.estimatedTransportQueueMs = queueMicroseconds >= 0 ? (double?)(queueMicroseconds / 1000.0) : null;
         metrics.estimatedSendRateBytesPerSecond = status.m_nSendRateBytesPerSecond;
-        if (SendQueue?.GetValue(socket) is Queue<byte[]> queue)
-        {
-            long bytes = 0;
-            foreach (var packet in queue) bytes += packet.Length;
-            metrics.applicationQueuedBytes = bytes;
-            metrics.outstandingBytes = bytes + status.m_cbPendingReliable + status.m_cbPendingUnreliable + status.m_cbSentUnackedReliable;
-        }
+        if (metrics.applicationQueuedBytes.HasValue)
+            metrics.outstandingBytes = metrics.applicationQueuedBytes.Value + status.m_cbPendingReliable + status.m_cbPendingUnreliable + status.m_cbSentUnackedReliable;
+    }
+
+    internal static void ReadManagedQueue(ZSteamSocket socket, PeerMetrics metrics)
+    {
+        if (SendQueue == null || SendQueue.IsStatic || SendQueue.FieldType != typeof(Queue<byte[]>))
+            throw new InvalidOperationException("Steam managed queue field contract changed");
+        var queue = (Queue<byte[]>)SendQueue.GetValue(socket);
+        metrics.applicationQueuedPackets = queue.Count;
+        long bytes = 0;
+        // Bound inspection work during severe backlogs; never report a partial byte total as complete.
+        if (queue.Count > 4096) { metrics.connectionHealthStatus = "queue_scan_limit"; return; }
+        foreach (var packet in queue) bytes += packet.Length;
+        metrics.applicationQueuedBytes = bytes;
     }
 
     private static double? Quality(float value) => value >= 0 && value <= 1 ? (double?)value : null;

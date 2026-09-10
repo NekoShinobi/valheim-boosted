@@ -4,7 +4,7 @@ Workflows run in [NekoShinobi/valheim-boosted](https://github.com/NekoShinobi/va
 
 ## Mod build
 
-`.github/workflows/mod.yml` runs for main, version tags, pull requests, and manual dispatch. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It validates reviewed game-method fingerprints, runs Harmony lifecycle and game-contract checks under Mono, builds Release, and uploads a ZIP artifact. See [compatibility checks](COMPATIBILITY.md).
+`.github/workflows/mod.yml` runs for main, version tags, pull requests, and manual dispatch. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It validates reviewed game-method fingerprints, runs fair-scheduler policy checks plus Harmony lifecycle/fallback and game-contract checks under Mono, builds Release, and uploads separate Thunderstore and direct plugin-install ZIP artifacts. See [compatibility checks](COMPATIBILITY.md).
 
 The Thunderstore ZIP contains root-level manifest.json, icon.png (256×256), README.md, and CHANGELOG.md, plus our DLL/PDB under BepInEx/plugins/ValheimBoosted and optional CI reference hashes. Game/framework DLLs and decompiled sources are excluded. BepInEx/Jötunn are runtime prerequisites, not bundled copies. Steam's public branch can change; reference hashes in each CI artifact record what that build used. The local build uses the installed client snapshot, while CI exercises dedicated-server compilation. Actual dedicated-server runtime behavior still needs an in-game check.
 
@@ -24,14 +24,23 @@ python3 scripts/package-mod.py --check
 python3 scripts/package-mod.py
 ```
 
-The result is `artifacts/valheim-boosted-0.1.0.zip`. Import that ZIP into a mod manager for testing, or upload it to Thunderstore when ready. When downloading a GitHub workflow artifact, extract the outer artifact archive first and upload the contained mod ZIP.
+The command produces two packages:
+
+| Package | Install destination |
+| --- | --- |
+| `artifacts/valheim-boosted-0.1.0.zip` | Import into a mod manager or upload to Thunderstore. |
+| `artifacts/valheim-boosted-0.1.0-plugins.zip` | Extract directly into `BepInEx/plugins`, or the Docker host's mounted `config/bepinex/plugins` directory. |
+
+The direct-install ZIP contains the same DLL/PDB under `ValheimBoosted/`, with any CI reference hashes kept in that folder. It contains no Thunderstore metadata and is intended for manual installation. Both packages require BepInEx/Jötunn to be installed separately.
+
+The workflow uses two `actions/upload-artifact` steps with `archive: false`, each uploading one ZIP unchanged; each filename becomes its artifact name. Download the individual artifact for the package you need. Older workflow downloads named `valheim-boosted-mod.zip` contain an extra wrapper: extract those once to obtain the package. Workflow downloads still require a GitHub login; attach the package to a public GitHub Release for anonymous downloads.
 
 For subsequent releases:
 
 1. Increase the same numeric version in `thunderstore/manifest.json`, `mod/ValheimBoosted.csproj`, `mod/Plugin.cs`, and `package.json`.
 2. Prepend a `## vMajor.Minor.Patch` section to the root `CHANGELOG.md`; keep older entries below it. Update the README version labels and installation examples.
 3. Keep the same Thunderstore package name and publishing Team. Keep `website_url` pointed at the project repository.
-4. Build and test, then create the matching `vMajor.Minor.Patch` Git tag. Both workflows reject a mismatched tag; the mod workflow validates packaging and uploads only the ZIP it just built.
+4. Build and test, then create the matching `vMajor.Minor.Patch` Git tag. Both workflows reject a mismatched tag; the mod workflow validates packaging and uploads only the two ZIPs it just built.
 5. Upload the new ZIP under that same Team. Existing published versions cannot be edited, even for README-only changes.
 
 The package uses `thunderstore/README.md` for a self-contained mod page; the root README includes developer/dashboard links for GitHub. The root changelog is copied unchanged into the ZIP. `thunderstore/icon.svg` is the editable artwork source; `icon.png` is the required 256×256 export. CI uses the checked-in PNG without an image-rendering dependency.

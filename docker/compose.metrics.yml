@@ -11,11 +11,15 @@ services:
     environment:
       TELEMETRY_PATH: /telemetry/snapshot.json
       HISTORY_SAMPLES: '300'
+      REPORTS_DIRECTORY: /reports
     volumes:
       - type: bind
         source: ${TELEMETRY_DIRECTORY:?Set TELEMETRY_DIRECTORY to the host telemetry directory}
         target: /telemetry
         read_only: true
+      - type: volume
+        source: reports
+        target: /reports
     read_only: true
     tmpfs:
       - /tmp
@@ -23,3 +27,6 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 256m
     cpus: 0.5
+
+volumes:
+  reports:

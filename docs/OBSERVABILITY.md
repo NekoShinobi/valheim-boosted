@@ -1,6 +1,6 @@
 # valheim-boosted observability — first pass
 
-valheim-boosted 0.1.0 collects read-only diagnostics. It does not alter ownership, send budgets, send frequency, simulation speed, or the network protocol. There are no telemetry RPCs. The separate Svelte/Bun dashboard reads these snapshots; see [dashboard/README.md](../dashboard/README.md).
+valheim-boosted 0.1.0 collects diagnostics and enables the [Stage 2 scheduler](SCHEDULING.md) by default for dedicated Steam servers. The scheduler changes normal send scheduling, while preserving ownership, vanilla packet formats, queue allowances and native rate settings. There are no telemetry RPCs. The separate Svelte/Bun dashboard reads these snapshots; see [dashboard/README.md](../dashboard/README.md).
 
 ## Client HUD
 
@@ -20,7 +20,7 @@ BepInEx generates `BepInEx/config/valheim.boosted.cfg` on the first load.
 | Telemetry / SampleIntervalSeconds | 1 | Allowed range 0.5–10 seconds. |
 | Telemetry / ExportOnServer | true | Export on dedicated servers and player hosts. |
 | Telemetry / ExportOnClient | false | Optional local client JSON export. |
-| Telemetry / ExportPath | `<BepInExRootPath>/valheim-boosted-telemetry/snapshot.json` | Use a unique path per process; restart to change. |
+| Telemetry / ExportPath | `/config/valheim-boosted/telemetry/snapshot.json` | Use a writable, unique path per process; restart to change. |
 | HUD / Enabled | true | HUD visibility; F8 updates this setting. |
 | HUD / ToggleKey | F8 | Configurable BepInEx keyboard shortcut. |
 | HUD / Position | TopRight | Choose `TopRight`, `TopLeft`, `BottomRight`, or `BottomLeft`; 12-pixel inset from the selected edges. |
@@ -33,7 +33,7 @@ Dedicated servers do not construct or render the HUD. Runtime role uses `ZNet.Is
 
 The version-1 JSON file is the interface for the separate dashboard process. Game objects are read only on the Unity thread. A background worker serializes a detached DTO, keeping at most one pending snapshot. It replaces the file atomically using a temporary file in the same directory. No network listener is created.
 
-Example development-profile path:
+The export default matches the README's Valheim container setup. Existing configurations retain their saved `ExportPath`; edit it and restart to adopt the new default. For local development or a non-container installation, explicitly set `ExportPath` to a writable absolute path, for example:
 
 ```text
 <repository>/.local/profile/BepInEx/valheim-boosted-telemetry/snapshot.json
@@ -42,6 +42,20 @@ Example development-profile path:
 For the container dashboard, share the directory, not a single bind-mounted file: atomic replacement changes the file's inode. Mount it read-only in the reader. A reader should reopen the file on each poll, check `schemaVersion`, and track `processSession`, `worldSession`, `sequence`, `capturedAtUtc`, `running`, and `role`. A practical initial staleness rule is no new sequence for three configured sample intervals. Old files can survive crashes; their presence is not a health check. Normal shutdown attempts to publish `running: false`; hard termination and blocked storage can prevent it. A final `menu` snapshot is published when an exporting world is left.
 
 Exporter exceptions are visible in the HUD/log, with log warnings capped to one per 30 seconds. `exportError` reports the previously observed worker error, so it can lag recovery by a snapshot. When storage fails, the old file may remain unchanged; staleness detection is essential.
+
+## Stage 2 additions
+
+Snapshots now include optional `scheduler` and `resources` objects, `modBuildId`, frame p99 and long-frame counts, save state/timings, and per-peer `replication`, heartbeat and managed queue measurements. See the [metric definitions and limitations](SCHEDULING.md#measurements). The dashboard shows these in **Resources & scheduling** and **Replication & heartbeat**. Optional fields preserve compatibility with older snapshots.
+
+`[Features] Replication`, `ConnectionHealth`, and `ProcessResources` default to true and can be disabled independently on restart. `ZdoReceive` must remain enabled to measure received ZDO payload bytes. Managed queue bytes remain available if Steam's native status query throws; the byte scan is capped at 4096 queued packets.
+
+## Connection measurement failures
+
+The dashboard's **live** indicator means snapshots are arriving; it does not mean every probe succeeds. A banner identifies connected peers with unavailable measurements, and **Diagnostics → Connection diagnostics** shows the failing operation, underlying exception type/message, and exception wrapper chain. `TargetInvocationException` is unwrapped so the actual native/library error can be identified. Older snapshots remain supported and show a prompt to update the mod when error details are missing.
+
+Each peer exports optional `measurementError` fields (`exceptionType`, `message`, `operation`, `exceptionChain`), cleared in a fresh successful sample. Messages are bounded to 512 characters and operations to 256; full stack traces stay in BepInEx's server log. Error messages can include runtime library names or local paths. Look for `Steam telemetry failed` in that log. Warnings share a 30-second limit across peers, including changing exceptions and unsuccessful native result codes.
+
+`SteamTransport` becomes `degraded` if any attempted peer query fails, continues retrying each sample, and returns to `active` when all queries succeed. With no connected Steam peers it reports `available` and explains that it is waiting. Its cumulative calls/attempts count includes failed queries. Other working probes and snapshot export continue independently.
 
 ## Metric semantics
 

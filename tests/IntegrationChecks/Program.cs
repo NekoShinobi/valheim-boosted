@@ -7,7 +7,15 @@ using ValheimBoosted;
 
 // Minimal game/config fixtures. Patch lifecycle uses the actual shipped Harmony DLL.
 public static class Version { public static System.Version CurrentVersion => new System.Version(1, 0, 7); public const uint c_networkVersion = 39; }
-public sealed class ZNet { }
+public sealed class ZNet {
+    public static ZNet instance;
+    public bool Dedicated = true;
+    public bool IsDedicated() => Dedicated;
+    public static implicit operator bool(ZNet value) => value != null;
+}
+public class TestSocket { public bool Connected = true; public bool IsConnected() => Connected; }
+public sealed class ZSteamSocket : TestSocket { }
+public sealed class ZNetPeer { public ZRpc m_rpc = new ZRpc(); public TestSocket m_socket = new ZSteamSocket(); public bool Ready = true; public bool IsReady() => Ready; }
 public sealed class ZRpc { }
 public sealed class ZPackage { }
 public sealed class ZDO { }
@@ -15,19 +23,32 @@ public sealed class ZNetView { }
 public sealed class ZNetScene { private Dictionary<ZDO, ZNetView> m_instances; }
 public sealed class ZDOMan {
     public float Total;
+    public sealed class ZDOPeer { public ZNetPeer m_peer; }
+    public readonly List<ZDOPeer> Peers = new List<ZDOPeer>();
+    public int Sent, Cursor = -1, VanillaCalls, Sends;
+    public float Timer;
+    public bool ThrowSend;
+    public Action AfterSend;
+    [MethodImpl(MethodImplOptions.NoInlining)] public bool SendZDOs(ZDOPeer peer, bool flush) { Sends++; if (ThrowSend) throw new InvalidOperationException("send failed"); Sent++; AfterSend?.Invoke(); return true; }
+    [MethodImpl(MethodImplOptions.NoInlining)] public void SendZDOToPeers2(float dt) { VanillaCalls++; }
+
     [MethodImpl(MethodImplOptions.NoInlining)] public void Update(float delta) { if (delta < 0) throw new InvalidOperationException("original"); Total += delta; }
     [MethodImpl(MethodImplOptions.NoInlining)] public void RPC_ZDOData(ZRpc rpc, ZPackage package) { }
 }
 namespace BepInEx.Configuration {
+    public sealed class ConfigDescription { public ConfigDescription(string text, object range) { } }
+    public sealed class AcceptableValueRange<T> { public AcceptableValueRange(T min, T max) { } }
     public sealed class ConfigEntry<T> { public T Value; }
     public sealed class ConfigFile {
         public bool Enabled = true;
+        public bool? Scheduling;
         public HashSet<string> Disabled = new HashSet<string>();
-        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = (T)(object)(Enabled && !Disabled.Contains(key)) };
+        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = typeof(T) == typeof(bool) ? (T)(object)(section == "Scheduling" ? (Scheduling ?? (bool)(object)value) : Enabled && !Disabled.Contains(key)) : value };
+        public ConfigEntry<T> Bind<T>(string section, string key, T value, ConfigDescription description) => new ConfigEntry<T> { Value = value };
     }
 }
 namespace ValheimBoosted {
-    public static class Plugin { public const string PluginGuid = "valheim.boosted.integration-tests"; }
+    public static class Plugin { public const string PluginVersion = "test"; public const string PluginGuid = "valheim.boosted.integration-tests"; }
     internal static class SteamMetrics { internal static string Initialize() => "fixture"; }
     internal static class TelemetryHooks {
         internal static TelemetryIntegration Integration;
@@ -96,6 +117,7 @@ internal static class Program {
             failed.Audit(20);
             Check(!Harmony.GetPatchInfo(method).Owners.Contains(Plugin.PluginGuid), "Failed probe hooks removed at next audit");
         }
+        SchedulerIntegrationChecks.Run(Check);
         Console.WriteLine($"PASS: {checks} Harmony integration checks."); return 0;
     }
 }

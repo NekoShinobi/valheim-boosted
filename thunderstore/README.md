@@ -43,7 +43,7 @@ Other positions: `TopLeft`, `BottomLeft`, and `BottomRight`.
 
 ## Server telemetry
 
-Servers and player hosts export to `BepInEx/valheim-boosted-telemetry/snapshot.json` by default. To choose a shared location, edit the config and restart:
+Servers and player hosts export to `/config/valheim-boosted/telemetry/snapshot.json` by default, matching the documented container setup. Existing configs retain their saved path; update it and restart to use this location. For a non-container installation, choose a writable absolute path instead:
 
 ```ini
 [Telemetry]
@@ -61,6 +61,10 @@ Individual probes can be disabled in the config's `[Features]` section: `FrameTi
 
 The HUD shows compatibility and hook status; the dashboard's **Diagnostics** section includes every probe, failure reasons, and hook invocation counts.
 
-This release measures networking; it does not automatically improve performance or tune simulation ownership, queues, or send rates. Remote client CPU reporting is not implemented. In-game validation of this release is pending.
+Steam query failures include the underlying exception and operation in the snapshot. The dashboard flags affected connections, while the server logs the full exception at most once every 30 seconds across peers. A degraded Steam probe keeps retrying and reports recovery automatically; live snapshots alone do not imply successful connection measurements.
+
+The Stage 2 fair scheduler is enabled by default for dedicated Steam servers in new configurations. Existing configs retain their saved setting; set `[Scheduling] Enabled = false` and restart to use vanilla scheduling; defaults are `MaxCallsPerFrame = 4`, `TimeBudgetMs = 2`, and `MaxDebtPerPeer = 2`. It targets 20 Hz opportunities while preserving vanilla packets and queue limits. A single send can exceed the soft time budget. Multiplayer acceptance testing remains pending. [Scheduler details](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SCHEDULING.md).
+
+Additional default-on probes are `Replication`, `ConnectionHealth`, and `ProcessResources`. They expose send attempts, service age, heartbeat age, managed queue growth, process CPU/RSS, frame tails and save timings. No ownership changes, native rate tuning or client CPU reporting are implemented.
 
 Upgrading from the earlier local UrfMode prototype? Remove its DLL before installing. To retain settings, copy `local.urfmode.cfg` to `valheim.boosted.cfg` if the new config does not exist, and update any old export path.

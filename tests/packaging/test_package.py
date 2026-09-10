@@ -49,6 +49,35 @@ class PackagingChecks(unittest.TestCase):
             self.assertEqual(archive.read("CHANGELOG.md"), (self.root / "CHANGELOG.md").read_bytes())
             self.assertIsNone(archive.testzip())
 
+    def test_plugins_package_installs_directly_and_matches_thunderstore(self):
+        build = self.root / "mod/bin/Release/net48"
+        build.mkdir(parents=True)
+        for name in ("ValheimBoosted.dll", "ValheimBoosted.pdb", "assembly_valheim.dll", "Jotunn.dll"):
+            (build / name).write_bytes(name.encode())
+        for include_provenance in (False, True):
+            with self.subTest(provenance=include_provenance):
+                if include_provenance:
+                    provenance = self.root / ".local/references/ci-provenance.json"
+                    provenance.parent.mkdir(parents=True)
+                    provenance.write_text('{"build": "fixture"}')
+                thunderstore = packager.package(self.root, tag=f"v{self.version}")
+                output = packager.package(self.root, tag=f"v{self.version}", plugins_only=True)
+                self.assertEqual(output.name, f"valheim-boosted-{self.version}-plugins.zip")
+                expected = {"ValheimBoosted/ValheimBoosted.dll", "ValheimBoosted/ValheimBoosted.pdb"}
+                if include_provenance:
+                    expected.add("ValheimBoosted/build-references.json")
+                with zipfile.ZipFile(output) as archive, zipfile.ZipFile(thunderstore) as original:
+                    self.assertEqual(set(archive.namelist()), expected)
+                    self.assertIsNone(archive.testzip())
+                    plugins = self.root / "server profile/BepInEx/plugins"
+                    archive.extractall(plugins)
+                    for name in ("ValheimBoosted.dll", "ValheimBoosted.pdb"):
+                        data = original.read("BepInEx/plugins/ValheimBoosted/" + name)
+                        self.assertEqual((plugins / "ValheimBoosted" / name).read_bytes(), data)
+                    self.assertFalse((plugins / "BepInEx").exists())
+                    if include_provenance:
+                        self.assertEqual(archive.read("ValheimBoosted/build-references.json"), original.read("build-references.json"))
+
     def test_invalid_name_and_prerelease_suffix_rejected(self):
         self.mutate_manifest("name", "valheim-boosted")
         with self.assertRaisesRegex(ValueError, "names"):

@@ -54,9 +54,18 @@ jobs:
           dotnet restore mod/ValheimBoosted.csproj --locked-mode
           dotnet build mod/ValheimBoosted.csproj --configuration Release --no-restore
           python3 scripts/package-mod.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Upload Thunderstore package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: valheim-boosted-mod
           path: ${{ steps.package.outputs.package_path }}
+          # Upload the ready-to-install ZIP itself, without a second ZIP wrapper.
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload direct plugin-install package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ steps.package.outputs.plugins_package_path }}
+          archive: false
           if-no-files-found: error
           retention-days: 14

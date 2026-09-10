@@ -2,7 +2,7 @@
   "name": "valheim_boosted",
   "version_number": "0.1.0",
   "website_url": "https://github.com/NekoShinobi/valheim-boosted",
-  "description": "Pre-alpha networking diagnostics for Valheim. See connection quality, queues and simulation timing in an in-game HUD, with JSON telemetry for a separate dashboard.",
+  "description": "Pre-alpha Valheim networking diagnostics and optional fair scheduling for dedicated Steam servers. In-game HUD, server metrics and JSON telemetry for a separate dashboard.",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2350",
     "ValheimModding-Jotunn-2.30.0"

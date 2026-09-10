@@ -41,6 +41,8 @@ internal static class Program
                 || !CompatibilityPolicy.MatchesFingerprint(entry.Hash, CompatibilityPolicy.Fingerprint(method)))
                 throw new Exception("Unreviewed target: " + entry.Name);
         }
+        var replication = new ReplicationContracts();
+        System.Console.WriteLine("PASS: scheduler/send fingerprint pair, signatures and peer fields");
         // Initialize inspects managed contracts; it never calls Steam or starts Unity.
         System.Console.WriteLine($"PASS: game {game}, protocol {protocol}, transport {SteamMetrics.Initialize()}");
         return 0;

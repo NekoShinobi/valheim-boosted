@@ -1,15 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import MetricChart from './MetricChart.svelte';
+  import ConnectionDiagnostics from './ConnectionDiagnostics.svelte';
+  import RuntimeMetrics from './RuntimeMetrics.svelte';
+  import ReportControls from './ReportControls.svelte';
   import type { MetricsResponse } from '../shared/telemetry';
 
   let data = $state<MetricsResponse | null>(null);
   let error = $state(false);
   let selected = $state('');
   let metric = $state<'rttMs' | 'estimatedTransportQueueMs'>('rttMs');
+  let revision = 0;
   const snapshot = $derived(data?.snapshot);
   const peers = $derived(snapshot?.peers ?? []);
   const active = $derived(peers.find(p => p.peerSessionId === selected));
+  const unavailablePeers = $derived(peers.filter(p => p.connected && p.measurementStatus !== 'available'));
   const status = $derived(error ? 'offline' : data?.status ?? 'waiting');
   const blockedProbes = $derived(snapshot?.features?.filter(f => f.enabled && !['available', 'active', 'installed_waiting'].includes(f.status)).length ?? 0);
   const short = (id: string) => id.length > 8 ? '…' + id.slice(-8) : id;
@@ -30,13 +35,14 @@
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController;
     async function poll() {
+      const startedRevision = revision;
       controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
       try {
         const response = await fetch('/api/metrics', { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error('Metrics unavailable');
         const next: MetricsResponse = await response.json();
-        if (!stopped) { data = next; error = false; }
+        if (!stopped && startedRevision === revision) { data = next; error = false; }
       } catch { if (!stopped) error = true; }
       finally { clearTimeout(timeout); if (!stopped) timer = setTimeout(poll, 1000); }
     }
@@ -52,19 +58,23 @@
     <div><strong>valheim-boosted</strong><p class="muted">World observability</p></div>
     <a class="nav-active" href="#overview">◈ <span>Overview</span></a>
     <a href="#connections">⇄ <span>Connections</span></a>
+    <a href="#runtime">◷ <span>Resources &amp; scheduling</span></a>
     <a href="#ownership">◇ <span>Ownership</span></a>
     <a href="#diagnostics">◎ <span>Diagnostics</span></a>
-    <div class="sidebar-footer"><span class="eyebrow">OBSERVER MODE</span><p>Measurements only.<br />Gameplay stays in your hands.</p></div>
+    <a href="/reports">▤ <span>Reports</span></a>
+    <div class="sidebar-footer"><span class="eyebrow">{snapshot?.scheduler?.status === 'active' ? 'FAIR SCHEDULER' : 'OBSERVER MODE'}</span><p>{snapshot?.scheduler?.status === 'active' ? 'Experimental scheduling active. Watch service age and frame tails.' : 'Collecting measurements. Vanilla scheduling is retained.'}</p></div>
   </aside>
   <main id="overview">
     <header>
       <div><p class="eyebrow">YOUR WORLD, IN VIEW</p><h1>Server overview</h1><p class="muted">Connection health and simulation activity, together.</p></div>
       <div class="live-block"><span class="status {status}"><span class="dot"></span>{status}</span><small>{snapshot ? new Date(snapshot.capturedAtUtc).toLocaleTimeString() : 'No snapshot yet'}</small></div>
     </header>
+    <ReportControls {data} onreset={(next) => { revision++; data = next; error = false; }} />
     {#if status !== 'live'}
       <div class="notice" role="status">{error ? 'Dashboard connection lost. Any displayed values are the last received measurements.' : data?.message ?? 'Connecting to the metrics service…'}</div>
     {/if}
     {#if blockedProbes > 0}<div class="notice" role="status">{blockedProbes} diagnostic probe(s) unavailable. <a href="#diagnostics">Review compatibility and probe status.</a></div>{/if}
+    {#if unavailablePeers.length > 0}<div class="notice" role="status">Connection measurements unavailable for {unavailablePeers.length} of {peers.filter(p => p.connected).length} connected peers in this snapshot. Missing values do not indicate a healthy connection. <a href="#connection-diagnostics">View error details.</a></div>{/if}
     <div class="cards">
       <section class="stat"><span class="eyebrow">CONNECTED PEERS</span><strong>{snapshot ? peers.length : '—'}</strong><small>Server-observed connections</small></section>
       <section class="stat"><span class="eyebrow">FRAME INTERVAL · P95</span><strong>{number(snapshot?.frameIntervalMs?.p95)} <em>ms</em></strong><small>Includes frame limiting and waits</small></section>
@@ -81,15 +91,24 @@
       </tbody></table></div>
     </section>
     {#if active}<section class="panel detail"><div class="panel-heading"><h2>Peer {short(active.peerSessionId)}</h2><span class="eyebrow">{active.transport}</span></div><div class="detail-grid"><div><span>Application queue</span><strong>{kib(active.applicationQueuedBytes)} KiB</strong></div><div><span>Pending reliable</span><strong>{kib(active.pendingReliableBytes)} KiB</strong></div><div><span>Pending unreliable</span><strong>{kib(active.pendingUnreliableBytes)} KiB</strong></div><div><span>Sent, awaiting acknowledgment</span><strong>{kib(active.sentUnacknowledgedReliableBytes)} KiB</strong></div></div><p class="muted">Client CPU / frame timing: not reported. Outstanding data includes already-sent reliable bytes; it is not all waiting to leave the server.</p></section>{/if}
+    {#if snapshot && (snapshot.scheduler || snapshot.resources)}<RuntimeMetrics {snapshot} history={data?.history ?? []} />{/if}
     <section class="panel" id="ownership"><div class="panel-heading"><div><h2>Loaded-object ownership</h2><p class="muted">Ownership is distinct from who hosts the server.</p></div><span class="eyebrow">{snapshot?.ownershipStatus ?? 'Unavailable'}</span></div><div class="owners">{#each snapshot?.loadedOwnership ?? [] as owner}<div class="owner"><span>{owner.ownerSessionId === '0' ? 'Unowned' : 'Session ' + short(owner.ownerSessionId)}</span><strong>{number(owner.objects, 0)}</strong></div>{:else}<p class="muted">No loaded-object ownership measurements.</p>{/each}</div></section>
     <section class="panel" id="diagnostics">
       <div class="panel-heading"><div><h2>Diagnostic probes</h2><p class="muted">Game {snapshot?.compatibility?.gameVersion ?? 'unknown'} · Protocol {snapshot?.compatibility?.networkVersion ?? 'unknown'} · {snapshot?.compatibility?.status ?? 'Compatibility not reported'}</p></div></div>
+      <p class="muted build-id">Mod build: {snapshot?.modBuildId ?? 'not reported by this mod build'}</p>
       <p class="muted">Steam interface: {snapshot?.compatibility?.steamInterface ?? 'Unavailable'}. Feature changes require restarting Valheim.</p>
-      <div class="table-scroll"><table><thead><tr><th>Probe</th><th>Configured</th><th>Status</th><th>Hook calls</th><th>Details</th></tr></thead><tbody>
+      <div class="table-scroll"><table><thead><tr><th>Probe</th><th>Configured</th><th>Status</th><th>Calls / attempts</th><th>Details</th></tr></thead><tbody>
         {#each snapshot?.features ?? [] as feature (feature.id)}
           <tr><td>{feature.id}</td><td>{feature.enabled ? 'On' : 'Off'}</td><td>{feature.status}</td><td>{feature.target ? number(feature.invocations, 0) : '—'}</td><td>{feature.detail ?? feature.target ?? '—'}</td></tr>
         {:else}<tr><td colspan="5" class="empty">This snapshot does not include probe status.</td></tr>{/each}
       </tbody></table></div>
+      <div class="connection-diagnostics" id="connection-diagnostics">
+        <h2>Connection diagnostics</h2>
+        <p class="muted">Live describes snapshot delivery. Individual measurements can still fail. Query failures are retried each sample; server warnings are limited to one every 30 seconds across all peers.</p>
+        {#each unavailablePeers as peer (peer.peerSessionId)}
+          <ConnectionDiagnostics {peer} />
+        {:else}<p class="muted">{peers.length ? 'No connected peer measurement failures in this snapshot.' : 'Awaiting a connected peer.'}</p>{/each}
+      </div>
     </section>
     <footer><span>valheim-boosted <span class="muted">/ {snapshot?.modVersion ?? 'awaiting mod'}</span></span><span>— means unavailable · History is kept in memory</span></footer>
   </main>

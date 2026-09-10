@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises';
 import { parseSnapshot, type Snapshot, type MetricsResponse, type HistoryPoint } from '../shared/telemetry';
+import { Recording } from './recording';
 
 export class TelemetryStore {
   private snapshot: Snapshot | null = null;
@@ -8,6 +9,7 @@ export class TelemetryStore {
   private lastReadAt: number | null = null;
   private error: string | null = null;
   private busy = false;
+  private recording = new Recording();
 
   constructor(private readonly path: string, private readonly historyLimit = 300, private readonly staleMs = 5000) {}
 
@@ -22,15 +24,27 @@ export class TelemetryStore {
     if (!sameSession) this.history = [];
     this.snapshot = next;
     this.acceptedAt = now;
+    this.recording.accept(next, this.view(now).status === 'live');
     if (next.running && next.role !== 'menu') {
       this.history.push({
         at: Date.parse(next.capturedAtUtc), frameP95: next.frameIntervalMs?.p95 ?? null,
         networkP95: next.networkUpdateDurationMs?.p95 ?? null,
+        cpuPercentOneCore: next.resources?.cpuPercentOneCore ?? null,
+        maxServiceAgeMs: next.peers.some(p => p.replication?.serviceAgeSeconds != null)
+          ? Math.max(...next.peers.flatMap(p => p.replication?.serviceAgeSeconds == null ? [] : [p.replication.serviceAgeSeconds * 1000])) : null,
         peers: next.peers.map(p => ({ peerSessionId: p.peerSessionId, rttMs: p.rttMs, estimatedTransportQueueMs: p.estimatedTransportQueueMs, outgoingBytesPerSecond: p.outgoingBytesPerSecond, incomingBytesPerSecond: p.incomingBytesPerSecond })),
       });
       if (this.history.length > this.historyLimit) this.history.splice(0, this.history.length - this.historyLimit);
     }
   }
+
+  reset(now = Date.now()) {
+    this.history = [];
+    this.recording = new Recording(now);
+    return this.view(now);
+  }
+
+  report(name: string, now = Date.now()) { return this.recording.report(name, this.view(now).status); }
 
   async poll(now = Date.now()) {
     if (this.busy) return;
@@ -67,6 +81,6 @@ export class TelemetryStore {
     } else if (this.error && this.error !== 'Snapshot not found') {
       status = 'invalid'; message = this.error;
     }
-    return { status, message, snapshot, history: this.history, lastReadAtUtc: this.lastReadAt === null ? null : new Date(this.lastReadAt).toISOString() };
+    return { status, message, snapshot, history: this.history, recording: this.recording.view(), lastReadAtUtc: this.lastReadAt === null ? null : new Date(this.lastReadAt).toISOString() };
   }
 }

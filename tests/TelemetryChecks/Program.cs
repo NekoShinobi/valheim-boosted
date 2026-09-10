@@ -39,6 +39,8 @@ internal static class Program
     {
         if (args.Length == 1) return ReferenceChecks.Run(args[0]);
         CompatibilityChecks.Run(Check);
+        MeasurementChecks.Run(Check);
+        SchedulerChecks.Run(Check);
         string directory = Path.Combine(Path.GetTempPath(), "valheim-boosted-checks-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
@@ -57,12 +59,14 @@ internal static class Program
 
             string path = Path.Combine(directory, "snapshot.json");
             var initial = Snapshot(0);
+            initial.peers[0].measurementError = new MeasurementError { exceptionType = "DllNotFoundException", message = "missing library", operation = "Steamworks.Query", exceptionChain = "TargetInvocationException -> DllNotFoundException" };
             initial.compatibility = new CompatibilityInfo { gameVersion = "1.0.7", networkVersion = 39, status = "supported" };
             initial.features = new[] { new FeatureStatus { id = "NetworkTiming", enabled = true, status = "installed_waiting" } };
             SnapshotExporter.WriteAtomic(path, initial);
             using (var json = JsonDocument.Parse(File.ReadAllText(path)))
             {
                 Check(json.RootElement.GetProperty("schemaVersion").GetInt32() == 1, "Schema version");
+                Check(json.RootElement.GetProperty("peers")[0].GetProperty("measurementError").GetProperty("exceptionType").GetString() == "DllNotFoundException", "Underlying measurement error survives snapshot serialization");
                 Check(json.RootElement.GetProperty("peers")[0].GetProperty("rttMs").ValueKind == JsonValueKind.Null, "Unknown measurements serialize as null");
                 Check(json.RootElement.GetProperty("compatibility").GetProperty("networkVersion").GetUInt32() == 39, "Runtime protocol exported");
                 Check(json.RootElement.GetProperty("features")[0].GetProperty("status").GetString() == "installed_waiting", "Patch installation status exported without claiming execution");

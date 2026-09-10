@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
@@ -21,6 +20,7 @@ public sealed class Plugin : BaseUnityPlugin
     public const string PluginVersion = "0.1.0";
     private TelemetryIntegration integration;
     private TelemetryCollector collector;
+    private ReplicationIntegration replication;
     private SnapshotExporter exporter;
     private TelemetrySnapshot latest;
     private ConfigEntry<bool> hudEnabled;
@@ -40,7 +40,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Awake()
     {
-        if (!Config.Bind("Telemetry", "Enabled", true, "Collect read-only diagnostics. Changing this requires a restart.").Value)
+        if (!Config.Bind("Telemetry", "Enabled", true, "Enable telemetry and optional scheduler integration. Changing this requires a restart.").Value)
         { Logger.LogInfo("Telemetry configured_disabled: no probes, patches, HUD, or export started."); return; }
         hudEnabled = Config.Bind("HUD", "Enabled", true, "Display local diagnostics while in a world.");
         hudKey = Config.Bind("HUD", "ToggleKey", new KeyboardShortcut(KeyCode.F8), "Toggle diagnostics HUD.");
@@ -49,16 +49,17 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription("Snapshot interval; percentile history is bounded to 2048 samples per window.", new AcceptableValueRange<float>(0.5f, 10f)));
         exportServer = Config.Bind("Telemetry", "ExportOnServer", true, "Write snapshots on dedicated servers and player hosts.");
         exportClient = Config.Bind("Telemetry", "ExportOnClient", false, "Also write snapshots when playing as a client.");
-        exportPath = Config.Bind("Telemetry", "ExportPath", Path.Combine(BepInEx.Paths.BepInExRootPath, "valheim-boosted-telemetry", "snapshot.json"),
+        exportPath = Config.Bind("Telemetry", "ExportPath", "/config/valheim-boosted/telemetry/snapshot.json",
             "Local JSON snapshot path. Restart to change. Use a unique path for each game process.");
         configuredPath = exportPath.Value;
         integration = new TelemetryIntegration(Config, message => Logger.LogInfo(message));
-        collector = new TelemetryCollector(integration);
+        collector = new TelemetryCollector(integration, message => Logger.LogWarning(message));
         TelemetryHooks.Collector = collector;
         TelemetryHooks.Integration = integration;
         integration.Install();
+        replication = new ReplicationIntegration(Config, integration, message => Logger.LogInfo(message));
         nextSample = TelemetryCollector.Now + interval.Value;
-        Logger.LogInfo($"{PluginName} {PluginVersion} loaded (build {typeof(Plugin).Module.ModuleVersionId}). Read-only telemetry; F8 toggles HUD.");
+        Logger.LogInfo($"{PluginName} {PluginVersion} loaded (build {typeof(Plugin).Module.ModuleVersionId}). Telemetry ready; optional scheduler status is reported separately. F8 toggles HUD.");
     }
 
     private void FixedUpdate() { if (!stopped) collector?.FixedStep(); }
@@ -70,7 +71,7 @@ public sealed class Plugin : BaseUnityPlugin
         var net = ZNet.instance;
         if (net && !net.IsDedicated() && hudKey.Value.IsDown()) hudEnabled.Value = !hudEnabled.Value;
         double now = TelemetryCollector.Now;
-        try { integration.Audit(now); }
+        try { integration.Audit(now); replication.Audit(now); }
         catch (Exception ex) { Warn("Patch audit failed: " + ex.Message); }
         if (now < nextSample) return;
         nextSample = now + interval.Value;
@@ -162,6 +163,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
         TelemetryHooks.Collector = null;
         TelemetryHooks.Integration = null;
+        replication?.Dispose();
         integration?.Dispose();
     }
 }

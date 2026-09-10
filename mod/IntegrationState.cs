@@ -26,7 +26,7 @@ public sealed class FeatureStatus
     public string target;
     public long invocations;
     public FeatureStatus Copy() => (FeatureStatus)MemberwiseClone();
-    public bool Collect => status == "available" || status == "installed_waiting" || status == "active";
+    public bool Collect => status == "available" || status == "installed_waiting" || status == "active" || status == "degraded";
 }
 
 internal static class CompatibilityPolicy
