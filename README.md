@@ -17,7 +17,7 @@ Import `valheim-boosted-0.1.0.zip` into a Valheim profile in r2modman or Thunder
 
 Enter a world and press **F8**. The HUD starts at the top right; configure it in `BepInEx/config/valheim.boosted.cfg`. Install on the server for server metrics and on each client that wants its own HUD. Client CPU reporting to the server is not yet implemented.
 
-[Installation & configuration](docs/MOD-INSTALL.md) · [Changelog](CHANGELOG.md) · [Metric definitions](docs/OBSERVABILITY.md)
+[Installation & configuration](docs/MOD-INSTALL.md) · [Changelog](CHANGELOG.md) · [Metric definitions](docs/OBSERVABILITY.md) · [Compatibility & switches](docs/COMPATIBILITY.md)
 
 ## Start the metrics server
 

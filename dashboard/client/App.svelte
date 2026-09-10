@@ -11,6 +11,7 @@
   const peers = $derived(snapshot?.peers ?? []);
   const active = $derived(peers.find(p => p.peerSessionId === selected));
   const status = $derived(error ? 'offline' : data?.status ?? 'waiting');
+  const blockedProbes = $derived(snapshot?.features?.filter(f => f.enabled && !['available', 'active', 'installed_waiting'].includes(f.status)).length ?? 0);
   const short = (id: string) => id.length > 8 ? '…' + id.slice(-8) : id;
   const number = (value: number | null | undefined, digits = 1) => value == null ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: digits });
   const kib = (value: number | null | undefined) => value == null ? '—' : number(value / 1024);
@@ -52,6 +53,7 @@
     <a class="nav-active" href="#overview">◈ <span>Overview</span></a>
     <a href="#connections">⇄ <span>Connections</span></a>
     <a href="#ownership">◇ <span>Ownership</span></a>
+    <a href="#diagnostics">◎ <span>Diagnostics</span></a>
     <div class="sidebar-footer"><span class="eyebrow">OBSERVER MODE</span><p>Measurements only.<br />Gameplay stays in your hands.</p></div>
   </aside>
   <main id="overview">
@@ -62,6 +64,7 @@
     {#if status !== 'live'}
       <div class="notice" role="status">{error ? 'Dashboard connection lost. Any displayed values are the last received measurements.' : data?.message ?? 'Connecting to the metrics service…'}</div>
     {/if}
+    {#if blockedProbes > 0}<div class="notice" role="status">{blockedProbes} diagnostic probe(s) unavailable. <a href="#diagnostics">Review compatibility and probe status.</a></div>{/if}
     <div class="cards">
       <section class="stat"><span class="eyebrow">CONNECTED PEERS</span><strong>{snapshot ? peers.length : '—'}</strong><small>Server-observed connections</small></section>
       <section class="stat"><span class="eyebrow">FRAME INTERVAL · P95</span><strong>{number(snapshot?.frameIntervalMs?.p95)} <em>ms</em></strong><small>Includes frame limiting and waits</small></section>
@@ -79,6 +82,15 @@
     </section>
     {#if active}<section class="panel detail"><div class="panel-heading"><h2>Peer {short(active.peerSessionId)}</h2><span class="eyebrow">{active.transport}</span></div><div class="detail-grid"><div><span>Application queue</span><strong>{kib(active.applicationQueuedBytes)} KiB</strong></div><div><span>Pending reliable</span><strong>{kib(active.pendingReliableBytes)} KiB</strong></div><div><span>Pending unreliable</span><strong>{kib(active.pendingUnreliableBytes)} KiB</strong></div><div><span>Sent, awaiting acknowledgment</span><strong>{kib(active.sentUnacknowledgedReliableBytes)} KiB</strong></div></div><p class="muted">Client CPU / frame timing: not reported. Outstanding data includes already-sent reliable bytes; it is not all waiting to leave the server.</p></section>{/if}
     <section class="panel" id="ownership"><div class="panel-heading"><div><h2>Loaded-object ownership</h2><p class="muted">Ownership is distinct from who hosts the server.</p></div><span class="eyebrow">{snapshot?.ownershipStatus ?? 'Unavailable'}</span></div><div class="owners">{#each snapshot?.loadedOwnership ?? [] as owner}<div class="owner"><span>{owner.ownerSessionId === '0' ? 'Unowned' : 'Session ' + short(owner.ownerSessionId)}</span><strong>{number(owner.objects, 0)}</strong></div>{:else}<p class="muted">No loaded-object ownership measurements.</p>{/each}</div></section>
+    <section class="panel" id="diagnostics">
+      <div class="panel-heading"><div><h2>Diagnostic probes</h2><p class="muted">Game {snapshot?.compatibility?.gameVersion ?? 'unknown'} · Protocol {snapshot?.compatibility?.networkVersion ?? 'unknown'} · {snapshot?.compatibility?.status ?? 'Compatibility not reported'}</p></div></div>
+      <p class="muted">Steam interface: {snapshot?.compatibility?.steamInterface ?? 'Unavailable'}. Feature changes require restarting Valheim.</p>
+      <div class="table-scroll"><table><thead><tr><th>Probe</th><th>Configured</th><th>Status</th><th>Hook calls</th><th>Details</th></tr></thead><tbody>
+        {#each snapshot?.features ?? [] as feature (feature.id)}
+          <tr><td>{feature.id}</td><td>{feature.enabled ? 'On' : 'Off'}</td><td>{feature.status}</td><td>{feature.target ? number(feature.invocations, 0) : '—'}</td><td>{feature.detail ?? feature.target ?? '—'}</td></tr>
+        {:else}<tr><td colspan="5" class="empty">This snapshot does not include probe status.</td></tr>{/each}
+      </tbody></table></div>
+    </section>
     <footer><span>valheim-boosted <span class="muted">/ {snapshot?.modVersion ?? 'awaiting mod'}</span></span><span>— means unavailable · History is kept in memory</span></footer>
   </main>
 </div>

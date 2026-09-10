@@ -55,6 +55,12 @@ The optional **Svelte/Bun dashboard** runs separately on port **8080** and reads
 
 ## Pre-alpha scope
 
+Supported diagnostic contracts: **Valheim 1.0.7 / protocol 39**. Unsupported versions or changed hook targets disable affected probes and report why. Other players are not required to install this mod.
+
+Individual probes can be disabled in the config's `[Features]` section: `FrameTiming`, `GameCounters`, `NetworkTiming`, `ZdoReceive`, `SteamTransport`, and `Ownership`. Restart after changing these switches. Set `[Telemetry] Enabled = false` to turn off all collection and hooks.
+
+The HUD shows compatibility and hook status; the dashboard's **Diagnostics** section includes every probe, failure reasons, and hook invocation counts.
+
 This release measures networking; it does not automatically improve performance or tune simulation ownership, queues, or send rates. Remote client CPU reporting is not implemented. In-game validation of this release is pending.
 
 Upgrading from the earlier local UrfMode prototype? Remove its DLL before installing. To retain settings, copy `local.urfmode.cfg` to `valheim.boosted.cfg` if the new config does not exist, and update any old export path.

@@ -8,6 +8,8 @@ Join a world with the development profile and press **F8** to toggle the panel i
 
 `n/a` means unmeasured or unavailable; it never means healthy or zero. Remote server/owner CPU is explicitly unmeasured. The first RTT sample has no variation value. The HUD does not diagnose another player's connection from visual symptoms.
 
+Compatibility gates, exact hook contracts, and independent probe switches are documented in [Compatibility and diagnostic switches](COMPATIBILITY.md).
+
 ## Configuration
 
 BepInEx generates `BepInEx/config/valheim.boosted.cfg` on the first load.
@@ -25,7 +27,7 @@ BepInEx generates `BepInEx/config/valheim.boosted.cfg` on the first load.
 
 Edit the configuration before starting the game, or use a configuration manager that updates BepInEx entries at runtime. This plugin does not watch the configuration file for external edits.
 
-Dedicated servers do not construct or render the HUD. Runtime role uses `ZNet.IsServer()` / `IsDedicated()`, including host mode for local player hosts. The available build references are from the installed client; dedicated-server behavior must still be checked against the matching server binaries.
+Dedicated servers do not construct or render the HUD. Runtime role uses `ZNet.IsServer()` / `IsDedicated()`, including host mode for local player hosts. Client and dedicated-server reference contracts are checked separately; live dedicated-server behavior still requires the checks below.
 
 ## Snapshot interface
 

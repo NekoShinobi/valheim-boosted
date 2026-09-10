@@ -13,6 +13,15 @@ test('missing snapshot is waiting, not healthy', async () => {
   expect(store.view().snapshot).toBeNull();
 });
 
+test('compatibility reports survive validation and malformed probe reports are rejected', () => {
+  const value = { ...snapshot(), compatibility: { gameVersion: '1.0.7', networkVersion: 39, gameModuleId: 'module', status: 'supported', steamInterface: null },
+    features: [{ id: 'NetworkTiming', enabled: true, status: 'fingerprint_mismatch', detail: 'changed target', target: 'ZDOMan.Update', invocations: 0 }] };
+  expect(parseSnapshot(value).features?.[0]?.status).toBe('fingerprint_mismatch');
+  expect(() => parseSnapshot({ ...value, features: [...value.features, ...value.features] })).toThrow();
+  expect(() => parseSnapshot({ ...value, compatibility: { ...value.compatibility, networkVersion: '39' } })).toThrow();
+  expect(parseSnapshot(snapshot()).compatibility).toBeUndefined();
+});
+
 test('schema validation rejects malformed data and keeps unavailable values null', () => {
   expect(() => parseSnapshot({ ...snapshot(), schemaVersion: 9 })).toThrow();
   expect(() => parseSnapshot({ ...snapshot(), peers: [{ peerSessionId: 'x' }] })).toThrow();

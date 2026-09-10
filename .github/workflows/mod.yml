@@ -27,6 +27,7 @@ jobs:
         run: |
           python3 scripts/package-mod.py --check
           python3 -m unittest discover -s tests/packaging -v
+          python3 -m unittest discover -s tests/ci -v
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
@@ -36,15 +37,20 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y lib32gcc-s1
+          sudo apt-get install -y lib32gcc-s1 mono-runtime libmono-system-core4.0-cil libmono-system4.0-cil
           mkdir -p "$RUNNER_TEMP/steamcmd" "$RUNNER_TEMP/valheim"
           curl --fail --location --retry 3 https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "$RUNNER_TEMP/steamcmd.tar.gz"
           tar -xzf "$RUNNER_TEMP/steamcmd.tar.gz" -C "$RUNNER_TEMP/steamcmd"
-          "$RUNNER_TEMP/steamcmd/steamcmd.sh" +force_install_dir "$RUNNER_TEMP/valheim" +login anonymous +app_update 896660 validate +quit
+          bash scripts/install-server-references.sh "$RUNNER_TEMP/steamcmd/steamcmd.sh" "$RUNNER_TEMP/valheim"
           python3 scripts/prepare-ci.py "$RUNNER_TEMP/valheim"
       - name: Build and package
         id: package
         run: |
+          dotnet run --project tests/TelemetryChecks/TelemetryChecks.csproj -- .local/references/Managed/assembly_valheim.dll
+          dotnet build tests/IntegrationChecks/IntegrationChecks.csproj -p:RestoreLockedMode=true
+          mono tests/IntegrationChecks/bin/Debug/net48/IntegrationChecks.exe
+          dotnet build tests/GameContractChecks/GameContractChecks.csproj -p:RestoreLockedMode=true
+          mono tests/GameContractChecks/bin/Debug/net48/GameContractChecks.exe .local/references/Managed
           dotnet restore mod/ValheimBoosted.csproj --locked-mode
           dotnet build mod/ValheimBoosted.csproj --configuration Release --no-restore
           python3 scripts/package-mod.py

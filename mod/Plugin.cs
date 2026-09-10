@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
-using HarmonyLib;
+using Jotunn.Utils;
 using UnityEngine;
 
 namespace ValheimBoosted;
@@ -13,12 +13,13 @@ public enum HudPosition { TopLeft, TopRight, BottomLeft, BottomRight }
 
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
 [BepInDependency(Jotunn.Main.ModGuid)]
+[NetworkCompatibility(CompatibilityLevel.NotEnforced, VersionStrictness.None)]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "valheim.boosted";
     public const string PluginName = "valheim-boosted";
     public const string PluginVersion = "0.1.0";
-    private Harmony harmony;
+    private TelemetryIntegration integration;
     private TelemetryCollector collector;
     private SnapshotExporter exporter;
     private TelemetrySnapshot latest;
@@ -39,7 +40,8 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Awake()
     {
-        if (!Config.Bind("Telemetry", "Enabled", true, "Collect read-only diagnostics. Changing this requires a restart.").Value) return;
+        if (!Config.Bind("Telemetry", "Enabled", true, "Collect read-only diagnostics. Changing this requires a restart.").Value)
+        { Logger.LogInfo("Telemetry configured_disabled: no probes, patches, HUD, or export started."); return; }
         hudEnabled = Config.Bind("HUD", "Enabled", true, "Display local diagnostics while in a world.");
         hudKey = Config.Bind("HUD", "ToggleKey", new KeyboardShortcut(KeyCode.F8), "Toggle diagnostics HUD.");
         hudPosition = Config.Bind("HUD", "Position", HudPosition.TopRight, "Screen corner for the diagnostics HUD.");
@@ -47,27 +49,14 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription("Snapshot interval; percentile history is bounded to 2048 samples per window.", new AcceptableValueRange<float>(0.5f, 10f)));
         exportServer = Config.Bind("Telemetry", "ExportOnServer", true, "Write snapshots on dedicated servers and player hosts.");
         exportClient = Config.Bind("Telemetry", "ExportOnClient", false, "Also write snapshots when playing as a client.");
-        exportPath = Config.Bind("Telemetry", "ExportPath", Path.Combine(Paths.BepInExRootPath, "valheim-boosted-telemetry", "snapshot.json"),
+        exportPath = Config.Bind("Telemetry", "ExportPath", Path.Combine(BepInEx.Paths.BepInExRootPath, "valheim-boosted-telemetry", "snapshot.json"),
             "Local JSON snapshot path. Restart to change. Use a unique path for each game process.");
         configuredPath = exportPath.Value;
-        collector = new TelemetryCollector();
+        integration = new TelemetryIntegration(Config, message => Logger.LogInfo(message));
+        collector = new TelemetryCollector(integration);
         TelemetryHooks.Collector = collector;
-        harmony = new Harmony(PluginGuid);
-        try
-        {
-            harmony.Patch(AccessTools.Method(typeof(ZDOMan), "Update", new[] { typeof(float) }),
-                prefix: new HarmonyMethod(typeof(TelemetryHooks), nameof(TelemetryHooks.BeginNetworkUpdate)),
-                finalizer: new HarmonyMethod(typeof(TelemetryHooks), nameof(TelemetryHooks.EndNetworkUpdate)));
-            collector.NetworkTimingAvailable = true;
-        }
-        catch (Exception ex) { Logger.LogWarning("Network timing unavailable: " + ex.Message); }
-        try
-        {
-            harmony.Patch(AccessTools.Method(typeof(ZDOMan), "RPC_ZDOData", new[] { typeof(ZRpc), typeof(ZPackage) }),
-                postfix: new HarmonyMethod(typeof(TelemetryHooks), nameof(TelemetryHooks.AfterZdoData)));
-            collector.ReceiveTimingAvailable = true;
-        }
-        catch (Exception ex) { Logger.LogWarning("ZDO receive timing unavailable: " + ex.Message); }
+        TelemetryHooks.Integration = integration;
+        integration.Install();
         nextSample = TelemetryCollector.Now + interval.Value;
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded (build {typeof(Plugin).Module.ModuleVersionId}). Read-only telemetry; F8 toggles HUD.");
     }
@@ -81,6 +70,8 @@ public sealed class Plugin : BaseUnityPlugin
         var net = ZNet.instance;
         if (net && !net.IsDedicated() && hudKey.Value.IsDown()) hudEnabled.Value = !hudEnabled.Value;
         double now = TelemetryCollector.Now;
+        try { integration.Audit(now); }
+        catch (Exception ex) { Warn("Patch audit failed: " + ex.Message); }
         if (now < nextSample) return;
         nextSample = now + interval.Value;
         try
@@ -111,6 +102,8 @@ public sealed class Plugin : BaseUnityPlugin
     private static string FormatHud(TelemetrySnapshot s, string shortcut)
     {
         var text = new StringBuilder("valheim-boosted diagnostics · ").Append(shortcut).Append('\n');
+        text.Append("Compatibility: ").Append(s.compatibility?.status ?? "unknown").Append('\n');
+        text.Append("Network hook: ").Append(s.networkTimingStatus).Append(" · Receive: ").Append(s.zdoReceiveStatus).Append('\n');
         text.Append("Local frame interval p95/max: ").Append(Number(s.frameIntervalMs.p95)).Append(" / ").Append(Number(s.frameIntervalMs.max)).Append(" ms\n");
         text.Append("Local ZDO update p95: ").Append(Number(s.networkUpdateDurationMs.p95)).Append(" ms\n");
         text.Append("Loaded objects: ").Append(s.loadedObjects?.ToString() ?? "n/a").Append(" · Peers: ").Append(s.readyPeers).Append('\n');
@@ -162,12 +155,13 @@ public sealed class Plugin : BaseUnityPlugin
                 processSession = latest?.processSession, worldSession = latest?.worldSession,
                 sequence = (latest?.sequence ?? 0) + 1, role = "stopped", running = false,
                 capturedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-                peers = new PeerMetrics[0],
+                peers = new PeerMetrics[0], compatibility = integration?.Compatibility.Copy(), features = integration?.Snapshot(),
             };
             exporter.Publish(final);
             exporter.Dispose();
         }
         TelemetryHooks.Collector = null;
-        harmony?.UnpatchSelf();
+        TelemetryHooks.Integration = null;
+        integration?.Dispose();
     }
 }

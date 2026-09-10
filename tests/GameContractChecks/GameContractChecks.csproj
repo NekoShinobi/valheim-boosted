@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net48</TargetFramework><LangVersion>latest</LangVersion>
+    <GameReferences>$(MSBuildThisFileDirectory)../../.local/references/Managed</GameReferences>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NoWarn>0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Compile Include="../../mod/IntegrationState.cs" Link="IntegrationState.cs" />
+    <Compile Include="../../mod/SteamMetrics.cs" Link="SteamMetrics.cs" />
+    <Compile Include="../../mod/TelemetryModel.cs" Link="TelemetryModel.cs" />
+    <Reference Include="$(GameReferences)/assembly_*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameReferences)/UnityEngine*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameReferences)/com.rlabrecque.steamworks.net.dll"><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>../../.local/references/ModLibraries/0Harmony.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

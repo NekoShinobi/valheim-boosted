@@ -4,11 +4,11 @@ Workflows run in [NekoShinobi/valheim-boosted](https://github.com/NekoShinobi/va
 
 ## Mod build
 
-`.github/workflows/mod.yml` runs for main, version tags, pull requests, and manual dispatch. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It builds Release and uploads a ZIP artifact.
+`.github/workflows/mod.yml` runs for main, version tags, pull requests, and manual dispatch. It sets up the SDK from global.json, runs managed telemetry checks, downloads the current public dedicated server (Steam app 896660) anonymously with SteamCMD, and obtains pinned BepInEx/Jötunn references with checksum verification. It validates reviewed game-method fingerprints, runs Harmony lifecycle and game-contract checks under Mono, builds Release, and uploads a ZIP artifact. See [compatibility checks](COMPATIBILITY.md).
 
 The Thunderstore ZIP contains root-level manifest.json, icon.png (256×256), README.md, and CHANGELOG.md, plus our DLL/PDB under BepInEx/plugins/ValheimBoosted and optional CI reference hashes. Game/framework DLLs and decompiled sources are excluded. BepInEx/Jötunn are runtime prerequisites, not bundled copies. Steam's public branch can change; reference hashes in each CI artifact record what that build used. The local build uses the installed client snapshot, while CI exercises dedicated-server compilation. Actual dedicated-server runtime behavior still needs an in-game check.
 
-The first run needs access to Steam CDN/SteamCMD and Thunderstore. No Steam account secrets or private game-assembly uploads are required. Network outages can fail that download step.
+The first run needs access to Steam CDN/SteamCMD and Thunderstore. No Steam account secrets or private game-assembly uploads are required. SteamCMD completes a separate self-update first, then the Linux server installation is retried up to three times with ten-second delays. Each install attempt has a seven-minute timeout. A successful exit and a nonempty dedicated-server assembly are both required before compilation. Persistent Steam/CDN failures still fail the build; retries do not silently accept missing references.
 
 ## Thunderstore releases
 

@@ -28,12 +28,12 @@ internal sealed class TelemetryCollector
     private double lastSampleAt;
     private long sequence;
     private int fixedUpdates;
-    public bool NetworkTimingAvailable;
-    public bool ReceiveTimingAvailable;
+    private readonly TelemetryIntegration integration;
     public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
-    public TelemetryCollector()
+    public TelemetryCollector(TelemetryIntegration integration)
     {
+        this.integration = integration;
         lastFrameAt = lastSampleAt = Now;
         for (int i = 0; i < previousGc.Length; i++) previousGc[i] = GC.CollectionCount(i);
     }
@@ -41,7 +41,8 @@ internal sealed class TelemetryCollector
     public void Frame()
     {
         double now = Now;
-        frames.Add((now - lastFrameAt) * 1000);
+        if (integration.Features["FrameTiming"].Collect)
+            frames.Add((now - lastFrameAt) * 1000);
         lastFrameAt = now;
     }
 
@@ -76,8 +77,8 @@ internal sealed class TelemetryCollector
             role = !net ? "menu" : isServer ? (net.IsDedicated() ? "dedicated_server" : "host") : "client",
             frameIntervalMs = frames.Take(),
             networkUpdateDurationMs = network.Take(),
-            networkTimingStatus = NetworkTimingAvailable ? "available" : "hook_unavailable",
-            zdoReceiveStatus = ReceiveTimingAvailable ? "available" : "hook_unavailable",
+            networkTimingStatus = integration.Features["NetworkTiming"].status,
+            zdoReceiveStatus = integration.Features["ZdoReceive"].status,
             fixedUpdates = fixedUpdates,
             fixedStepSeconds = UnityEngine.Time.fixedDeltaTime,
             managedMemoryBytes = GC.GetTotalMemory(false),
@@ -93,7 +94,7 @@ internal sealed class TelemetryCollector
         lastSampleAt = now;
         var peers = new List<PeerMetrics>();
         var live = new HashSet<ZRpc>();
-        if (net)
+        if (net && integration.GameSupported)
         {
             foreach (var peer in net.GetPeers())
             {
@@ -113,7 +114,8 @@ internal sealed class TelemetryCollector
                 state.batches = 0;
                 try
                 {
-                    if (metrics.connected && peer.m_socket is ZSteamSocket steam) SteamMetrics.Read(steam, metrics);
+                    if (!integration.Features["SteamTransport"].Collect) metrics.measurementStatus = integration.Features["SteamTransport"].status;
+                    else if (metrics.connected && peer.m_socket is ZSteamSocket steam) SteamMetrics.Read(steam, metrics);
                     else if (!metrics.connected) metrics.measurementStatus = "disconnected";
                 }
                 catch (Exception ex) { metrics.measurementStatus = "unavailable:" + ex.GetType().Name; }
@@ -128,14 +130,17 @@ internal sealed class TelemetryCollector
         snapshot.peers = peers.ToArray();
         snapshot.readyPeers = peers.Count;
         var zdos = ZDOMan.instance;
-        if (net && zdos != null)
+        if (net && zdos != null && integration.Features["GameCounters"].Collect)
         {
             snapshot.knownZdos = zdos.NrOfObjects();
             snapshot.zdosSentLastGameSecond = zdos.GetSentZDOs();
             snapshot.zdosReceivedLastGameSecond = zdos.GetRecvZDOs();
             if (!isServer) snapshot.clientChangedZdos = zdos.GetClientChangeQueue();
         }
-        ReadOwnership(snapshot);
+        if (integration.Features["Ownership"].Collect) ReadOwnership(snapshot);
+        else snapshot.ownershipStatus = integration.Features["Ownership"].status;
+        snapshot.compatibility = integration.Compatibility.Copy();
+        snapshot.features = integration.Snapshot();
         return snapshot;
     }
 
@@ -175,15 +180,16 @@ internal sealed class TelemetryCollector
 internal static class TelemetryHooks
 {
     internal static TelemetryCollector Collector;
+    internal static TelemetryIntegration Integration;
 
     internal static void BeginNetworkUpdate(out long __state) => __state = Stopwatch.GetTimestamp();
 
     // Finalizers preserve the original exception and observe even failed updates.
     internal static Exception EndNetworkUpdate(Exception __exception, long __state)
     {
-        Collector?.NetworkUpdate((Stopwatch.GetTimestamp() - __state) * 1000.0 / Stopwatch.Frequency);
+        Integration?.Observe("NetworkTiming", () => Collector?.NetworkUpdate((Stopwatch.GetTimestamp() - __state) * 1000.0 / Stopwatch.Frequency));
         return __exception;
     }
 
-    internal static void AfterZdoData(ZRpc __0) => Collector?.ReceivedBatch(__0);
+    internal static void AfterZdoData(ZRpc __0) => Integration?.Observe("ZdoReceive", () => Collector?.ReceivedBatch(__0));
 }

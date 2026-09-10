@@ -35,8 +35,10 @@ internal static class Program
         return json.RootElement.GetProperty("sequence").GetInt64();
     }
 
-    public static int Main()
+    public static int Main(string[] args)
     {
+        if (args.Length == 1) return ReferenceChecks.Run(args[0]);
+        CompatibilityChecks.Run(Check);
         string directory = Path.Combine(Path.GetTempPath(), "valheim-boosted-checks-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
@@ -54,11 +56,16 @@ internal static class Program
             Check(stats.samples == 3001 && stats.percentileSamples == 2048 && stats.p95 == 1 && stats.max == 100000, "Bounded percentile window retains full-window max/count");
 
             string path = Path.Combine(directory, "snapshot.json");
-            SnapshotExporter.WriteAtomic(path, Snapshot(0));
+            var initial = Snapshot(0);
+            initial.compatibility = new CompatibilityInfo { gameVersion = "1.0.7", networkVersion = 39, status = "supported" };
+            initial.features = new[] { new FeatureStatus { id = "NetworkTiming", enabled = true, status = "installed_waiting" } };
+            SnapshotExporter.WriteAtomic(path, initial);
             using (var json = JsonDocument.Parse(File.ReadAllText(path)))
             {
                 Check(json.RootElement.GetProperty("schemaVersion").GetInt32() == 1, "Schema version");
                 Check(json.RootElement.GetProperty("peers")[0].GetProperty("rttMs").ValueKind == JsonValueKind.Null, "Unknown measurements serialize as null");
+                Check(json.RootElement.GetProperty("compatibility").GetProperty("networkVersion").GetUInt32() == 39, "Runtime protocol exported");
+                Check(json.RootElement.GetProperty("features")[0].GetProperty("status").GetString() == "installed_waiting", "Patch installation status exported without claiming execution");
             }
 
             // Readers must only see complete JSON while the writer replaces the snapshot.

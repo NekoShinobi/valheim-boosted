@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+if command -v mono >/dev/null 2>&1; then
+  exec mono "$@"
+fi
+workspace_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+mono_root="$workspace_root/.tools/mono"
+if [ ! -x "$mono_root/usr/bin/mono" ]; then
+  echo "Mono is required for Harmony integration checks. Use the CI runner or provide a local Mono runtime." >&2
+  exit 1
+fi
+export MONO_PATH="$mono_root/usr/lib/mono/4.5${MONO_PATH:+:$MONO_PATH}"
+export MONO_CFG_DIR="$mono_root/etc"
+exec "$mono_root/usr/bin/mono" "$@"

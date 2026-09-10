@@ -2,7 +2,7 @@ import type { Peer, Snapshot } from '../shared/telemetry';
 
 export function snapshot(sequence = 1, now = Date.now()): Snapshot {
   return {
-    schemaVersion: 1, modVersion: '0.3.0', processSession: 'test-process', worldSession: 'test-world',
+    schemaVersion: 1, modVersion: '0.1.0', processSession: 'test-process', worldSession: 'test-world',
     sequence, capturedAtUtc: new Date(now).toISOString(), sampleWindowSeconds: 1,
     role: 'dedicated_server', running: true, managedMemoryBytes: 128 * 1048576,
     frameIntervalMs: { samples: 60, percentileSamples: 60, mean: 16, p95: 18, max: 22 },

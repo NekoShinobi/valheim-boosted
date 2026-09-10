@@ -29,6 +29,8 @@ export interface Timing {
 }
 
 export interface Snapshot {
+  compatibility?: { gameVersion: string | null; networkVersion: number | null; gameModuleId: string | null; status: string; steamInterface: string | null } | null;
+  features?: { id: string; enabled: boolean; status: string; detail: string | null; target: string | null; invocations: number }[] | null;
   schemaVersion: 1;
   modVersion: string;
   processSession: string;
@@ -88,5 +90,17 @@ export function parseSnapshot(value: unknown): Snapshot {
   }
   if (value.loadedOwnership !== null && (!Array.isArray(value.loadedOwnership) || value.loadedOwnership.length > 10000
     || !value.loadedOwnership.every(x => object(x) && typeof x.ownerSessionId === 'string' && number(x.objects)))) throw new Error('Invalid ownership metrics');
+  if (value.compatibility != null) {
+    const c = value.compatibility;
+    if (!object(c) || typeof c.status !== 'string' || !nullableNumber(c.networkVersion)
+      || !['gameVersion', 'gameModuleId', 'steamInterface'].every(k => c[k] === null || typeof c[k] === 'string')) throw new Error('Invalid compatibility report');
+  }
+  if (value.features != null) {
+    if (!Array.isArray(value.features) || value.features.length > 32
+      || !value.features.every(f => object(f) && typeof f.id === 'string' && typeof f.enabled === 'boolean'
+        && typeof f.status === 'string' && number(f.invocations)
+        && ['detail', 'target'].every(k => f[k] === null || typeof f[k] === 'string'))
+      || new Set(value.features.map(f => f.id)).size !== value.features.length) throw new Error('Invalid feature report');
+  }
   return value as unknown as Snapshot;
 }

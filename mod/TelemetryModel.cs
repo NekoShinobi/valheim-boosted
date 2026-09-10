@@ -7,6 +7,8 @@ public sealed class TelemetrySnapshot
 {
     public int schemaVersion = 1;
     public string modVersion = Plugin.PluginVersion;
+    public CompatibilityInfo compatibility;
+    public FeatureStatus[] features;
     public string processSession;
     public string worldSession;
     public long sequence;
