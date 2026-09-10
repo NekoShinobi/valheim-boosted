@@ -28,9 +28,9 @@ internal sealed class AdvancedReplication : IDisposable
     internal AdvancedReplication(ConfigFile config, TelemetryIntegration integration, Action<string> log)
     {
         this.log = log;
-        Windows = Feature("SendWindows", config.Bind("SendWindows", "Enabled", false, "Experimental per-peer ZDO allowances on dedicated Steam servers. Restart required.").Value);
-        Rates = Feature("SteamRate", config.Bind("SteamRate", "Enabled", false, "Experimentally raise connection SendRateMax; preserve globals and SendRateMin. Restart required.").Value);
-        Compression = Feature("Compression", config.Bind("Compression", "Enabled", false, "Negotiate optional lossless ZDO compression with compatible Steam peers. Both endpoints must enable it. Restart required.").Value);
+        Windows = Feature("SendWindows", config.Bind("SendWindows", "Enabled", true, "Experimental per-peer ZDO allowances on dedicated Steam servers. Restart required.").Value);
+        Rates = Feature("SteamRate", config.Bind("SteamRate", "Enabled", true, "Experimentally raise connection SendRateMax; preserve globals and SendRateMin. Restart required.").Value);
+        Compression = Feature("Compression", config.Bind("Compression", "Enabled", true, "Negotiate optional lossless ZDO compression with compatible Steam peers. Both endpoints must enable it. Restart required.").Value);
         Windows.target = "ZDOMan.SendZDOs"; Rates.target = "Steam connection SendRateMax"; Compression.target = "ZDOData (negotiated peers)";
         targetRate = config.Bind("SendWindows", "TargetBytesPerSecond", 153600, new ConfigDescription("Ceiling for RTT-based allowance calculations, in bytes/second.", new AcceptableValueRange<int>(10240, 1048576))).Value;
         maximumWindow = config.Bind("SendWindows", "MaximumBytes", 32768, new ConfigDescription("Maximum per-peer ZDO allowance, in bytes. Vanilla floor is 10240.", new AcceptableValueRange<int>(10240, 65536))).Value;

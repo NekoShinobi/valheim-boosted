@@ -38,6 +38,21 @@ export const historyMetrics = [
   { key: 'compressionEncodeP95Ms', label: 'Compression encode · worst window p95', unit: 'ms', rollup: 'max' },
   { key: 'compressionDecodeP95Ms', label: 'Compression decode · worst window p95', unit: 'ms', rollup: 'max' },
   { key: 'captainTransfers', label: 'Ship ownership transfers', unit: 'transfers/bucket', rollup: 'sum' },
+  // Append-only metric layout 3. Layout 2 has the first 36 entries.
+  { key: 'freshPositions', label: 'Fresher replication positions', unit: 'selections/bucket', rollup: 'sum' },
+  { key: 'positionFallbacks', label: 'Vanilla reference position fallbacks', unit: 'selections/bucket', rollup: 'sum' },
+  { key: 'actorBonuses', label: 'Actor score bonuses', unit: 'objects/bucket', rollup: 'sum' },
+  { key: 'vanillaPriorityPasses', label: 'Reserved vanilla priority passes', unit: 'passes/bucket', rollup: 'sum' },
+  { key: 'earlyBuffered', label: 'Early ZDO packets buffered', unit: 'packets/bucket', rollup: 'sum' },
+  { key: 'earlyReplayed', label: 'Early ZDO packets replayed', unit: 'packets/bucket', rollup: 'sum' },
+  { key: 'earlyFailures', label: 'Early ZDO connection closures', unit: 'closures/bucket', rollup: 'sum' },
+  { key: 'mapSentBytes', label: 'Map RPC payload sent', unit: 'bytes/bucket', rollup: 'sum' },
+  { key: 'mapReceivedBytes', label: 'Map RPC payload received', unit: 'bytes/bucket', rollup: 'sum' },
+  { key: 'mapPackets', label: 'Map position packets sent', unit: 'packets/bucket', rollup: 'sum' },
+  { key: 'mapSkipped', label: 'Map sends deferred', unit: 'sends/bucket', rollup: 'sum' },
+  { key: 'mapRejected', label: 'Map messages rejected or send failures', unit: 'messages/bucket', rollup: 'sum' },
+  { key: 'earlyQueuedBytes', label: 'Early ZDO queue', unit: 'bytes', rollup: 'max' },
+  { key: 'mapCapablePeers', label: 'Clients requesting map updates', unit: 'peers', rollup: 'mean' },
 ] as const;
 export type HistoryMetric = typeof historyMetrics[number]['key'];
 export type HistoryValues = Partial<Record<HistoryMetric, number | null>>;
@@ -70,7 +85,7 @@ export interface HistoryResult {
   markersTruncated: boolean;
 }
 export interface HistoryArchive {
-  metricLayout?: 2;
+  metricLayout?: 2 | 3;
   version: 1; fromMs: number; toMs: number; stepMs: number; series: HistorySeries[];
   rows: HistoryRow[]; seriesTruncated: boolean;
   retainedFromMs?: number;
@@ -87,7 +102,7 @@ export function validHistoryArchive(v: unknown): v is HistoryArchive {
   const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= Number.MAX_SAFE_INTEGER;
   const nullable = (x: unknown) => x === null || num(x);
   const str = (x: unknown) => typeof x === 'string' && x.length <= 192;
-  if (!object(v) || v.version !== 1 || v.metricLayout != null && v.metricLayout !== 2 || !num(v.fromMs) || !num(v.toMs) || v.toMs <= v.fromMs || !num(v.stepMs) || v.stepMs < 1000
+  if (!object(v) || v.version !== 1 || v.metricLayout != null && v.metricLayout !== 2 && v.metricLayout !== 3 || !num(v.fromMs) || !num(v.toMs) || v.toMs <= v.fromMs || !num(v.stepMs) || v.stepMs < 1000
     || v.retainedFromMs != null && !num(v.retainedFromMs) || typeof v.seriesTruncated !== 'boolean'
     || !Array.isArray(v.series) || v.series.length > 64 || !Array.isArray(v.rows) || v.rows.length > 2600) return false;
   if (!v.series.every(s => object(s) && typeof s.id === 'string' && /^[a-f0-9]{32}$/.test(s.id)
@@ -109,5 +124,5 @@ export function validHistoryArchive(v: unknown): v is HistoryArchive {
     && ['samples', 'observedMs'].every(k => r[k] == null || num(r[k]))
     && Array.isArray(r.values)
     && (r.weights == null || Array.isArray(r.weights) && r.weights.length === (r.values as unknown[]).length && r.weights.every(num))
-    && Array.isArray(r.values) && (r.values.length === historyMetrics.length || v.metricLayout == null && r.values.length === 26) && r.values.every((n, i) => nullable(n) || historyMetrics[i].key === 'frameLimit' && n === -1));
+    && Array.isArray(r.values) && (v.metricLayout === 3 ? r.values.length === historyMetrics.length : v.metricLayout === 2 ? r.values.length === 36 : r.values.length === 26 || r.values.length === 36) && r.values.every((n, i) => nullable(n) || historyMetrics[i].key === 'frameLimit' && n === -1));
 }

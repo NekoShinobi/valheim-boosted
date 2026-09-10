@@ -11,7 +11,7 @@ internal static class Program
 {
     static int Main(string[] args)
     {
-        if (args.Length != 1) throw new ArgumentException("Pass the game Managed directory");
+        if (args.Length < 1 || args.Length > 2) throw new ArgumentException("Pass the game Managed directory, optionally --fingerprints");
         string directory = Path.GetFullPath(args[0]);
         AppDomain.CurrentDomain.AssemblyResolve += (_, e) =>
         {
@@ -21,7 +21,18 @@ internal static class Program
             string path = Path.Combine(directory, name + ".dll");
             return File.Exists(path) ? Assembly.LoadFrom(path) : null;
         };
+        if (args.Length == 2 && args[1] == "--fingerprints") return PrintFingerprints();
         return Inspect();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static int PrintFingerprints()
+    {
+        foreach (var type in new[] { typeof(ZDOMan), typeof(ZNet), typeof(Minimap), typeof(ZNetPeer) })
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(m => new[] { "CreateSyncList", "ServerSortSendZDOS", "ServerSendCompare", "AddForceSendZdos", "OnNewConnection", "AddPeer", "RemovePeer", "RPC_ZDOData", "UpdatePlayerList", "GetOtherPublicPlayers", "UpdatePlayerPins", "GetRefPos" }.Contains(m.Name)))
+                System.Console.WriteLine(type.Name + "." + method + " " + CompatibilityPolicy.Fingerprint(method));
+        return 0;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

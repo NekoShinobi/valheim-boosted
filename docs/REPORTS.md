@@ -4,11 +4,11 @@ Reports capture the metrics service's observed recording window. They summarize 
 
 ## Capture a baseline and candidate
 
-1. Start the game and let the world warm up. Open the dashboard and check that the relevant probes and peer measurements are available.
-2. Select **Reset stats**. The next complete exported window starts the recording; a window straddling the reset is skipped.
+1. Start the game and let the world warm up. Open **Live → Diagnostics** and **Live → Connections** to check probe and peer measurements.
+2. In **Live → Overview**, expand **Save a report** and select **Reset stats**. The next complete exported window starts the recording; a window straddling the reset is skipped.
 3. Run a repeatable scenario. Keep the save, location, player count, activity and duration comparable. Name it (for example, `Vanilla · base combat · 5 players`) and select **Save report**.
 4. Apply one networking change. For a fair-scheduler baseline, set `[Scheduling] Enabled = false` and restart Valheim; enable it and restart for the candidate.
-5. After warm-up, reset stats, repeat the scenario, and save the candidate. Open **Compare reports** and select both recordings.
+5. After warm-up, reset stats, repeat the scenario, and save the candidate. Open **Reports** and select both recordings.
 
 Saving copies the current aggregates to disk and continues recording. Reset clears the unsaved aggregates and live chart history for everyone connected to that metrics service. Instantaneous overview cards still show the latest snapshot. It never changes the game's counters, configuration or scheduling, and never deletes a saved report.
 
@@ -17,9 +17,9 @@ The first fresh running snapshot starts automatic recording after metrics-servic
 ## What the numbers mean
 
 - **Timing means** are weighted by exported event counts (frames, network updates or service intervals).
-- **Other means** average available observations. The comparison page's peer metrics pool connected-peer observations; a player present longer contributes more. Use **Open timeline** for individual players, including returning-account grouping and separate login records.
+- **Other means** average available observations. The comparison page's peer metrics pool connected-peer observations; a player present longer contributes more. Use **View timeline** for individual players, including returning-account grouping and separate login records.
 - **Worst-window p95/p99** is the highest exported percentile among recorded windows. It is not a whole-recording percentile. The mod's percentile sample buffer is bounded, and raw samples cannot be reconstructed from JSON summaries.
-- **Counter rates** sum per-window counters and divide by observed seconds in windows where that metric was available. The table also shows the observed total. Peer counters sum available connected peers. Missing peers/probes may undercount; inspect coverage and transport availability.
+- **Counter rates** sum per-window counters and divide by observed seconds in windows where that metric was available. Enable **Show coverage** to see the observed total. Peer counters sum available connected peers. Missing peers/probes may undercount; inspect coverage and transport availability.
 - **Coverage** includes unique snapshots, observed sample-window duration, elapsed capture time, missed sequences, and per-metric window/observation counts. Polling can miss overwritten snapshots; missing intervals are not interpolated or treated as zero.
 - **Peaks** and worst-window percentiles tend to grow with longer recordings. They should be compared over similar durations.
 
@@ -44,3 +44,5 @@ New timelines retain login session records, server-scoped player IDs and per-met
 An archive is stored inside the report JSON and survives seven-day live-history expiration. It captures data already received when you save; delayed client windows that arrive later do not change the saved report. Data already expired or never collected cannot be recovered by saving. When the history worker cannot archive data, the report records a timeline error and still saves its existing aggregates. Existing reports without a timeline remain readable. Report files are limited to 4 MiB; detailed live history is independently retained in SQLite. **Reset stats** does not erase this persistent history.
 
 Reports also record Stage 3–5 settings and measurements: ZDO allowances, effective Steam maximum rates, largest connection failure total, operation-weighted compression cost, bytes saved and observed send/receive/reject/skip/ship-transfer rates. Savings include compression envelopes and exclude Steam overhead. A settings change pauses recording even when the mod version remains 0.1.0. Older reports omit these metrics and remain readable. See [server improvements](SERVER-IMPROVEMENTS.md).
+
+In **Live → Overview**, expand **Save a report** for naming, saving and resetting the recording. On **Reports**, expand **Recording details & settings** for build and configuration metadata; enable **Show coverage** for per-metric sample counts and observed totals.

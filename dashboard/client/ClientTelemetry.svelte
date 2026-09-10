@@ -10,10 +10,10 @@
   const n = (v: number | null | undefined) => v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
 </script>
 <section class="panel" id="client-telemetry">
-  <div class="panel-heading"><div><h2>Player telemetry</h2><p class="muted">Client-reported performance, separate from server-observed connections.</p></div><a href="/history" class="outline">Open timeline ↗</a></div>
+  <div class="panel-heading"><div><h2>Player performance</h2><p class="muted">Reported by connected clients.</p></div><a href="/history" class="outline">View history ↗</a></div>
   {#if telemetry}
     {#if telemetry.identityStatus === 'identity_key_invalid'}<p class="runtime-note">Returning-player grouping is unavailable: the server's ClientTelemetry.IdentityKey is invalid. Restore its original 64-character hexadecimal key and restart the server.</p>{/if}
-    <p class="runtime-note muted">{telemetry.status} · {n(telemetry.receivedBytes / 1024)} KiB received · {telemetry.rejectedMessages} rejected messages · {telemetry.congestionSkips} sends deferred · {telemetry.droppedSamples} samples dropped</p>
+    <details class="measurement-notes"><summary>Telemetry delivery</summary><p>{telemetry.status} · {n(telemetry.receivedBytes / 1024)} KiB received · {telemetry.rejectedMessages} rejected messages · {telemetry.congestionSkips} sends deferred · {telemetry.droppedSamples} samples dropped</p></details>
     <div class="table-scroll"><table><thead><tr><th>Player / session</th><th>Reporting</th><th>FPS</th><th>Frame p95</th><th>Sample age</th><th>Clock uncertainty</th></tr></thead><tbody>
       {#each telemetry.peers as peer (peer.streamId)}
         {@const point = latest.get(peer.streamId)}

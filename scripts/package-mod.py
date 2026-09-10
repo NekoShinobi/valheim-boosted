@@ -42,8 +42,15 @@ def release_sections(changelog):
 def validate(root=ROOT, tag=None):
     manifest = json.loads((root / "thunderstore/manifest.json").read_text(encoding="utf-8"))
     required = {"name", "version_number", "website_url", "description", "dependencies"}
-    if set(manifest) != required:
-        raise ValueError("Manifest must contain exactly the five Thunderstore fields")
+    # Gale reads this optional extension for local ZIP imports. Thunderstore
+    # assigns published package ownership from the uploading team instead.
+    if not required <= set(manifest) or set(manifest) - required - {"author"}:
+        raise ValueError("Manifest must contain the five Thunderstore fields and optional author only")
+    if "author" in manifest:
+        author = manifest["author"]
+        if (not isinstance(author, str) or not 1 <= len(author) <= 128
+                or author != author.strip() or any(ord(char) < 32 for char in author)):
+            raise ValueError("Manifest author must contain 1–128 characters without surrounding whitespace or control characters")
     if not isinstance(manifest["name"], str) or not re.fullmatch(r"[A-Za-z0-9_]{1,128}", manifest["name"]):
         raise ValueError("Thunderstore names allow letters, numbers and underscores only")
     version = manifest["version_number"]

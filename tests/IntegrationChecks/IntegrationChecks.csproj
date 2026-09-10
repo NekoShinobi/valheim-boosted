@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net48</TargetFramework><LangVersion>latest</LangVersion><NoWarn>0649;0169</NoWarn><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../mod/MapPositionProtocol.cs" Link="MapPositionProtocol.cs" />
+    <Compile Include="../../mod/MapSharingIntegration.cs" Link="MapSharingIntegration.cs" />
+    <Compile Include="../../mod/NetworkFeaturePatch.cs" Link="NetworkFeaturePatch.cs" />
+    <Compile Include="../../mod/NetworkEnhancementContracts.cs" Link="NetworkEnhancementContracts.cs" />
     <Compile Include="../../mod/AdvancedReplication.cs" Link="AdvancedReplication.cs" />
     <Compile Include="../../mod/ZdoCompression.cs" Link="ZdoCompression.cs" />
     <Compile Include="../../mod/CompressionSession.cs" Link="CompressionSession.cs" />

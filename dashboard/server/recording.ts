@@ -94,6 +94,22 @@ export class Recording {
       add('compressedSent', improved.compressedSent); add('compressedReceived', improved.compressedReceived);
       add('compressionRejected', improved.compressionRejected); add('compressionSkipped', improved.compressionSkipped);
       add('captainTransfers', improved.captainTransfers); add('captainDeferred', improved.captainDeferred);
+      if (improved.network) {
+        add('freshPositions', improved.network.freshPositions);
+        add('positionFallbacks', improved.network.positionFallbacks);
+        add('actorBonuses', improved.network.actorBonuses);
+        add('vanillaPriorityPasses', improved.network.vanillaPriorityPasses);
+        add('earlyBuffered', improved.network.earlyBuffered);
+        add('earlyReplayed', improved.network.earlyReplayed);
+        add('earlyFailures', improved.network.earlyFailures);
+        add('mapSentBytes', improved.network.mapSentBytes);
+        add('mapReceivedBytes', improved.network.mapReceivedBytes);
+        add('mapPackets', improved.network.mapPackets);
+        add('mapSkipped', improved.network.mapSkipped);
+        add('mapRejected', improved.network.mapRejected);
+        add('earlyQueuedBytes', improved.network.earlyQueuedBytes);
+        add('mapCapablePeers', improved.network.mapCapablePeers);
+      }
     }
   }
 

@@ -12,8 +12,17 @@ internal static class CompressionIntegrationChecks
     {
         using (var telemetry = new TelemetryIntegration(new ConfigFile(), _ => { }))
         using (var advanced = new AdvancedReplication(new ConfigFile(), telemetry, _ => { }))
-            check(!advanced.Windows.enabled && !advanced.Rates.enabled && !advanced.Compression.enabled && !advanced.NeedsPatch,
-                "New generated stage 3/5 switches are off independently of default-on scheduling");
+            check(advanced.Windows.enabled && advanced.Rates.enabled && advanced.Compression.enabled && advanced.NeedsPatch,
+                "New generated stage 3/5 switches are on alongside default-on scheduling");
+        foreach (var section in new[] { "SendWindows", "SteamRate", "Compression" })
+        {
+            var config = new ConfigFile(); config.Switches[section + ".Enabled"] = false;
+            using (var telemetry = new TelemetryIntegration(config, _ => { }))
+            using (var advanced = new AdvancedReplication(config, telemetry, _ => { }))
+                check(!telemetry.Features[section].enabled && telemetry.Features[section].status == "configured_disabled"
+                    && new[] { advanced.Windows, advanced.Rates, advanced.Compression }.Count(f => f.enabled) == 2,
+                    "Saved opt-out remains independent for " + section);
+        }
         WindowChecks(check);
         // The fixture receiver is intentionally unreviewed. Production must reject it.
         bool rejected = false;
@@ -44,6 +53,11 @@ internal static class CompressionIntegrationChecks
             var incoming = remote.Frame(LosslessZdoCodec.Encode(raw));
             modded.m_rpc.Deliver(Data, incoming);
             check(ZDOMan.instance.ReceiveCalls == 1 && ZDOMan.instance.Received.SequenceEqual(raw), "Compressed receiver invokes vanilla parser once with exact raw bytes");
+            byte[] buffered = null;
+            EarlyZdoIntegration.Current = new EarlyZdoIntegration { Buffer = (_, package) => { buffered = package.GetArray(); return true; } };
+            try { modded.m_rpc.Deliver(Data, incoming); }
+            finally { EarlyZdoIntegration.Current = null; }
+            check(buffered.SequenceEqual(raw) && ZDOMan.instance.ReceiveCalls == 1, "Compressed payload defers to early FIFO without an extra vanilla invocation");
             compression.Invoke(vanilla.m_rpc, "ZDOData", new object[] { new ZPackage(raw) });
             check(vanilla.m_rpc.Sent.Last().Item1 == "ZDOData", "Mixed unmodded peer retains vanilla traffic");
             UnityEngine.Time.frameCount++; TelemetryCollector.ClockStep = 0.002;
@@ -59,7 +73,7 @@ internal static class CompressionIntegrationChecks
             modded.m_rpc.Deliver(Data, corrupt);
             check(!modded.m_socket.IsConnected() && vanilla.m_socket.IsConnected() && ZDOMan.instance.ReceiveCalls == 2, "Invalid framed payload closes only offending connection and never calls parser");
             var metrics = new ServerImprovementMetrics(); compression.Capture(metrics);
-            check(metrics.compressedSent == 2 && metrics.compressedReceived == 2 && metrics.compressionRejected == 1
+            check(metrics.compressedSent == 2 && metrics.compressedReceived == 3 && metrics.compressionRejected == 1
                 && metrics.rawPayloadBytes > metrics.framedPayloadBytes && metrics.compressionEncodeMs.samples == 2, "Actual handler work, saved bytes and rejection counters exported");
             compression.Capture(metrics); check(metrics.compressedSent == 0 && metrics.compressionEncodeMs.samples == 0, "Window metrics drain exactly once");
             compression.Tick(5); check(modded.m_rpc.Handlers.Count == 0, "Disconnect removes old token handlers");

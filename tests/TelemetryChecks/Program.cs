@@ -42,6 +42,7 @@ internal static class Program
         MeasurementChecks.Run(Check);
         SchedulerChecks.Run(Check);
         ServerImprovementChecks.Run(Check);
+        NetworkEnhancementChecks.Run(Check);
         IdleServerChecks.Run(Check);
         ClientTransportChecks.Run(Check);
         string directory = Path.Combine(Path.GetTempPath(), "valheim-boosted-checks-" + Guid.NewGuid().ToString("N"));

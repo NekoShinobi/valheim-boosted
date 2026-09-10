@@ -35,13 +35,11 @@ Snapshots retain the actual elapsed `sampleWindowSeconds` and add optional `samp
 
 Main-loop frame intervals near 100 ms are expected at 10 FPS. Long-frame counters still count those intervals, so compare them with the idle state and player activity before interpreting them as lag. Physics retains its existing fixed timestep; reducing main-loop FPS does not guarantee a proportional CPU reduction. Memory remains allocated and Steam/background workers continue. No power or CPU savings are claimed until measured on a live server.
 
-The empty-peer fair-scheduler path clears its state before creating peer lookup sets. Network processing, Steam callbacks, saves, physics timing and time scale retain their normal code paths.
+Network processing, Steam callbacks, saves and physics remain enabled while idle.
 
-## Live verification
+## Check idle behavior
 
 1. Record at least five minutes with no peers and `IdleServer.Enabled = false` as a baseline.
 2. Enable idle mode and restart. Wait past the delay, verify `IdleServer` is active and FPS approaches the configured cap, then record the same duration and compare process CPU.
 3. Join while idle. Verify the original cap and telemetry cadence return during connection setup; check Steam and crossplay joining if both are used.
 4. Disconnect and verify that the full delay runs again. Check saving, restart, and reconnects. Check a client and player host remain unaffected.
-
-Automated tests cover policy transitions, the production controller with game fixtures, and telemetry freshness. These checks complement the live measurements above; they do not establish actual CPU savings or multiplayer behavior.

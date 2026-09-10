@@ -6,6 +6,14 @@
 **Full Changelog**: https://github.com/NekoShinobi/valheim-boosted/compare/0.1.0...0.2.0
 <!-- valheim-boosted:release-notes:end -->
 
+- Added default-on fresh replication relevance, bounded actor priority, early connection ZDO buffering with ordered replay, and negotiated 2 Hz map updates with marker interpolation.
+- Dedicated servers now require public location sharing for all players by default, including unmodded clients. Added the independent `Map.ForceLocationSharing` switch; saved client preferences are preserved.
+- Added replication/buffer/map activity and bandwidth counters to the HUD policy indicator, dashboard, history and report comparisons. History schema 4 and metric layout 3 retain earlier data and saved reports.
+
+- Replaced the dashboard sidebar with shared Live, History and Reports navigation, focused live sections and the mod logo. Simplified page text, made report details/coverage expandable, and kept navigation available on mobile.
+- Enabled send windows, Steam rate tuning, captain ownership and negotiated compression by default for new configs, preserving existing opt-outs and all compatibility/fallback checks.
+- Added author metadata for Gale local ZIP imports and documented Linux local-icon troubleshooting. Packaging checks preserve the root icon and validate the optional author field.
+
 ## v0.1.0
 
 **Pre-alpha · Initial package**

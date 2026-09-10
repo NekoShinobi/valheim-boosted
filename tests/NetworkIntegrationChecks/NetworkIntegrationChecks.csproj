@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net48</TargetFramework><LangVersion>latest</LangVersion>
+    <GameReferences>$(MSBuildThisFileDirectory)../../.local/references/Managed</GameReferences>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../mod/ValheimBoosted.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="$(GameReferences)/assembly_*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameReferences)/UnityEngine*.dll"><Private>false</Private></Reference>
+    <Reference Include="../../.local/references/ModLibraries/BepInEx.dll"><Private>true</Private></Reference>
+    <Reference Include="../../.local/references/ModLibraries/Jotunn.dll"><Private>true</Private></Reference>
+    <Compile Include="../TelemetryChecks/NetworkEnhancementChecks.cs" Link="NetworkEnhancementChecks.cs" />
+  </ItemGroup>
+  <Import Project="../HarmonyRuntime.props" />
+</Project>

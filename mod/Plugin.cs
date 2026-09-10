@@ -24,6 +24,9 @@ public sealed class Plugin : BaseUnityPlugin
     private ReplicationIntegration replication;
     private IdleServerIntegration idleServer;
     private CaptainIntegration captain;
+    private ReplicationRelevance relevance;
+    private EarlyZdoIntegration earlyZdo;
+    private MapSharingIntegration mapSharing;
     private SnapshotExporter exporter;
     private TelemetrySnapshot latest;
     private ConfigEntry<bool> hudEnabled;
@@ -64,6 +67,9 @@ public sealed class Plugin : BaseUnityPlugin
         clientTelemetry = new ClientTelemetryTransport(Config, integration);
         idleServer = new IdleServerIntegration(Config, integration);
         captain = new CaptainIntegration(Config, integration, message => Logger.LogInfo(message));
+        relevance = new ReplicationRelevance(Config, integration, message => Logger.LogInfo(message));
+        earlyZdo = new EarlyZdoIntegration(Config, integration, message => Logger.LogInfo(message));
+        mapSharing = new MapSharingIntegration(Config, integration, relevance, message => Logger.LogInfo(message));
         nextSample = TelemetryCollector.Now + interval.Value;
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded (build {typeof(Plugin).Module.ModuleVersionId}). Telemetry ready; optional scheduler status is reported separately. F8 toggles HUD.");
     }
@@ -81,7 +87,7 @@ public sealed class Plugin : BaseUnityPlugin
         idleServer.Tick(now);
         // Publish the new cadence on transitions, and never delay a wake-up snapshot.
         if (wasIdle != idleServer.Idle) nextSample = now;
-        try { integration.Audit(now); replication.Audit(now); replication.Advanced.Tick(now); captain.Tick(now); clientTelemetry.Tick(now); }
+        try { integration.Audit(now); replication.Audit(now); replication.Advanced.Tick(now); captain.Tick(now); clientTelemetry.Tick(now); relevance.Tick(now); earlyZdo.Tick(now); mapSharing.Tick(now); }
         catch (Exception ex) { Warn("Patch audit failed: " + ex.Message); }
         if (now < nextSample) return;
         double sampleInterval = idleServer.SampleInterval(interval.Value);
@@ -93,6 +99,16 @@ public sealed class Plugin : BaseUnityPlugin
             clientTelemetry.Capture(latest);
             replication.Advanced.Capture(latest);
             captain.Capture(latest.serverImprovements);
+            latest.serverImprovements.network = new NetworkEnhancementMetrics {
+                freshPositions = relevance.FreshPositions, positionFallbacks = relevance.PositionFallbacks,
+                actorBonuses = relevance.ActorBonuses, vanillaPriorityPasses = relevance.VanillaPasses,
+                earlyBuffered = earlyZdo.Buffered, earlyReplayed = earlyZdo.Replayed, earlyFailures = earlyZdo.Failures, earlyQueuedBytes = earlyZdo.QueuedBytes,
+                forcedSharing = mapSharing.ForceSharing, mapCapablePeers = mapSharing.CapablePeers, mapSentBytes = mapSharing.SentBytes,
+                mapReceivedBytes = mapSharing.ReceivedBytes, mapPackets = mapSharing.PositionPackets, mapSkipped = mapSharing.Skipped, mapRejected = mapSharing.Rejected,
+            };
+            relevance.FreshPositions = relevance.PositionFallbacks = relevance.ActorBonuses = relevance.VanillaPasses = 0;
+            earlyZdo.Buffered = earlyZdo.Replayed = earlyZdo.Failures = 0;
+            mapSharing.SentBytes = mapSharing.ReceivedBytes = mapSharing.PositionPackets = mapSharing.Skipped = mapSharing.Rejected = 0;
             bool shouldExport = net && (net.IsServer() ? exportServer.Value : exportClient.Value);
             if (shouldExport && exporter == null) exporter = new SnapshotExporter(configuredPath);
             latest.exportError = exporter?.Error;
@@ -102,6 +118,7 @@ public sealed class Plugin : BaseUnityPlugin
             if (latest.exportError != null) Warn("Telemetry export: " + latest.exportError);
             hudText = FormatHud(latest, hudKey.Value.ToString());
             if (latest.role == "client") hudText += "\nClient telemetry: " + clientTelemetry.Status + " · " + clientTelemetry.MarkerShortcut + " marks lag";
+            if (latest.role == "client" && mapSharing.ServerRequiresSharing) hudText += "\nMap sharing: required by this server";
         }
         catch (Exception ex) { Warn("Telemetry collection unavailable: " + ex); hudText = "ValheimBoosted: telemetry unavailable (see log)"; }
     }
@@ -181,6 +198,9 @@ public sealed class Plugin : BaseUnityPlugin
         }
         TelemetryHooks.Collector = null;
         TelemetryHooks.Integration = null;
+        mapSharing?.Dispose();
+        earlyZdo?.Dispose();
+        relevance?.Dispose();
         replication?.Dispose();
         clientTelemetry?.Dispose();
         integration?.Dispose();

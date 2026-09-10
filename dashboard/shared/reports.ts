@@ -46,6 +46,20 @@ export const reportMetrics = [
   { id: 'timeLimited', label: 'Scheduler time-limited frames', unit: '/s', mode: 'rate' },
   { id: 'workLimited', label: 'Scheduler work-limited frames', unit: '/s', mode: 'rate' },
   { id: 'discardedDebt', label: 'Scheduler discarded credits', unit: '/s', mode: 'rate' },
+  { id: 'freshPositions', label: 'Fresher replication positions', unit: 'selections/s', mode: 'rate' },
+  { id: 'positionFallbacks', label: 'Vanilla reference position fallbacks', unit: 'selections/s', mode: 'rate' },
+  { id: 'actorBonuses', label: 'Actor score bonuses', unit: 'objects/s', mode: 'rate' },
+  { id: 'vanillaPriorityPasses', label: 'Reserved vanilla priority passes', unit: 'passes/s', mode: 'rate' },
+  { id: 'earlyBuffered', label: 'Early ZDO packets buffered', unit: 'packets/s', mode: 'rate' },
+  { id: 'earlyReplayed', label: 'Early ZDO packets replayed', unit: 'packets/s', mode: 'rate' },
+  { id: 'earlyFailures', label: 'Early ZDO connection closures', unit: 'closures/s', mode: 'rate' },
+  { id: 'mapSentBytes', label: 'Map RPC payload sent', unit: 'bytes/s', mode: 'rate' },
+  { id: 'mapReceivedBytes', label: 'Map RPC payload received', unit: 'bytes/s', mode: 'rate' },
+  { id: 'mapPackets', label: 'Map position packets sent', unit: 'packets/s', mode: 'rate' },
+  { id: 'mapSkipped', label: 'Map sends deferred', unit: 'sends/s', mode: 'rate' },
+  { id: 'mapRejected', label: 'Map messages rejected or send failures', unit: 'messages/s', mode: 'rate' },
+  { id: 'earlyQueuedBytes', label: 'Early ZDO queue · peak', unit: 'bytes', mode: 'max' },
+  { id: 'mapCapablePeers', label: 'Clients requesting map updates', unit: 'peers', mode: 'mean' },
 ] as const;
 export type MetricId = typeof reportMetrics[number]['id'];
 export interface Aggregate {

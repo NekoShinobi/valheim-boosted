@@ -20,7 +20,9 @@ Available measurements depend on the transport and game state. Missing measureme
 
 ## Install
 
-Import this ZIP into a Valheim profile in r2modman or Thunderstore Mod Manager. Install the declared **BepInExPack Valheim** and **Jötunn** dependencies if prompted. Once published, the package can also be installed directly from its listing.
+Import this ZIP into a Valheim profile in Gale, r2modman or Thunderstore Mod Manager. Install the declared **BepInExPack Valheim** and **Jötunn** dependencies if prompted. Once published, the package can also be installed directly from its listing.
+
+For Gale, choose **Import → Local mod** and use the regular ZIP, which includes the icon and author metadata. The separate `-plugins.zip` is for manual installation. Re-import the updated regular ZIP to refresh an older local entry's author.
 
 For manual installation, install those dependencies, then copy the ZIP's `BepInEx/plugins/ValheimBoosted` folder into your profile's `BepInEx/plugins/` directory.
 
@@ -65,7 +67,7 @@ Steam query failures include the underlying exception and operation in the snaps
 
 The Stage 2 fair scheduler is enabled by default for dedicated Steam servers in new configurations. Existing configs retain their saved setting; set `[Scheduling] Enabled = false` and restart to use vanilla scheduling; defaults are `MaxCallsPerFrame = 4`, `TimeBudgetMs = 2`, and `MaxDebtPerPeer = 2`. It targets 20 Hz opportunities while preserving vanilla packets and queue limits. A single send can exceed the soft time budget. Multiplayer acceptance testing remains pending. [Scheduler details](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SCHEDULING.md).
 
-Additional default-on probes are `Replication`, `ConnectionHealth`, and `ProcessResources`. They expose send attempts, service age, heartbeat age, managed queue growth, process CPU/RSS, frame tails and save timings. Opt-in Stages 3–5 add per-peer ZDO allowances, connection maximum-rate tuning, ship captain ownership and negotiated lossless compression. All four new switches default off and require a restart. Stages 3–4 apply on dedicated Steam servers; compression needs both endpoints enabled and agreed. The dashboard shows their settings, savings/cost and history. [Configuration and limits](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SERVER-IMPROVEMENTS.md). General NPC ownership rebalancing remains future work.
+Additional default-on probes are `Replication`, `ConnectionHealth`, and `ProcessResources`. They expose send attempts, service age, heartbeat age, managed queue growth, process CPU/RSS, frame tails and save timings. Default-on Stages 3–5 add per-peer ZDO allowances, connection maximum-rate tuning, ship captain ownership and negotiated lossless compression. All four switches default on in new configs. Existing configs retain their saved values; set the four `Enabled` entries to `true` and restart to adopt the new defaults, or set individual entries to `false` to opt out. Stages 3–4 apply on dedicated Steam servers; compression needs both endpoints enabled and agreed. The dashboard shows their settings, savings/cost and history. [Configuration and limits](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SERVER-IMPROVEMENTS.md). General NPC ownership rebalancing remains future work.
 
 ## Player telemetry and history
 
@@ -74,3 +76,7 @@ With the mod installed on both server and clients, performance summaries are sha
 Set `[ClientTelemetry] ShareWithServer = false` on a client to stop sharing, or `ReceiveFromClients = false` on a server to decline reports. The server can set `IncludePlayerNames = false` to use opaque session labels. These settings require a restart. Unmodded clients remain compatible. Sharing is independent of local JSON export and needs no additional client-facing port.
 
 Upgrading from the earlier local UrfMode prototype? Remove its DLL before installing. To retain settings, copy `local.urfmode.cfg` to `valheim.boosted.cfg` if the new config does not exist, and update any old export path.
+
+## Replication and map sharing
+
+Fresh replication relevance, bounded actor priority, early connection buffering and negotiated map updates are enabled by default. Dedicated servers also force location sharing for all players, including unmodded clients. Set `[Map] ForceLocationSharing = false` in `valheim.boosted.cfg` and restart for voluntary sharing. Players keep their saved map preference for other servers. [Configuration and limits](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SERVER-IMPROVEMENTS.md#replication-and-map-improvements).

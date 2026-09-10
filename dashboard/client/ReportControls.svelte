@@ -17,8 +17,8 @@
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? 'Request failed.');
-      if (reset) { onreset(result); message = 'Stats reset. Waiting for the next complete sample window.'; }
-      else { saved = result; message = 'Report saved. Recording continues until you reset stats.'; }
+      if (reset) { onreset(result); message = 'Stats reset. Waiting for the next sample.'; }
+      else { saved = result; message = 'Report saved. Recording continues.'; }
     } catch (error) {
       failed = true;
       message = error instanceof Error && error.name === 'TimeoutError'
@@ -28,17 +28,14 @@
   }
 </script>
 
-<section class="panel recording-panel" aria-label="Report recording">
-  <div class="panel-heading">
-    <div><p class="eyebrow">MEASURE A CHANGE</p><h2>Recording window</h2><p class="muted">{recording?.snapshots ?? 0} snapshots · {(recording?.observedSeconds ?? 0).toFixed(1)} observed seconds{#if recording?.startedAtUtc} · since {new Date(recording.startedAtUtc).toLocaleTimeString()}{/if}</p></div>
-    <a class="outline" href="/reports">Compare reports ↗</a>
-  </div>
+{#if recording?.pausedReason}<p class="notice" role="status">{recording.pausedReason} Open “Save a report” to start a new recording.</p>{/if}
+<details class="panel recording-panel">
+  <summary><span class="recording-title">Save a report</span><span class="recording-meta">{recording?.snapshots ?? 0} samples · {Math.round(recording?.observedSeconds ?? 0)} s recorded{#if recording?.startedAtUtc} · since {new Date(recording.startedAtUtc).toLocaleTimeString()}{/if}</span></summary>
   <form class="report-actions" onsubmit={(event) => { event.preventDefault(); void action(false); }}>
-    <label>Report name<input bind:value={name} maxlength="100" placeholder="e.g. Vanilla · meadow base" required /></label>
+    <label>Report name<input bind:value={name} maxlength="100" placeholder="e.g. Meadow base · baseline" required /></label>
     <button class="primary" type="submit" disabled={busy || !recording?.snapshots || !name.trim()}>Save report</button>
     <button class="outline" type="button" disabled={busy} onclick={() => void action(true)}>Reset stats</button>
   </form>
-  <p class="muted runtime-note">Reset starts a new recording and clears the overview charts for everyone using this dashboard. Persistent history and saved reports are retained.</p>
-  {#if recording?.pausedReason}<p class="notice report-message">{recording.pausedReason}</p>{/if}
+  <p class="muted runtime-note">Reset clears live stats for everyone. Saved reports and history are kept.</p>
   {#if message}<div class:report-error={failed} class="report-message" role="status">{message}{#if saved} <a href={`/api/reports/${saved.id}/download`}>Download JSON</a> · <a href={`/reports?baseline=${saved.id}`}>View report</a>{/if}</div>{/if}
-</section>
+</details>

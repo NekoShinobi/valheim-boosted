@@ -33,7 +33,7 @@ export class HistoryDatabase {
     if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 365) throw new Error('History retention must be 1–365 days');
     this.db = new Database(path, { create: true, strict: true });
     const version = (this.db.query('PRAGMA user_version').get() as { user_version: number }).user_version;
-    if (version > 3) { this.db.close(); throw new Error('History database is newer than this service'); }
+    if (version > 4) { this.db.close(); throw new Error('History database is newer than this service'); }
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=2000; PRAGMA cache_size=-8192; PRAGMA temp_store=FILE;');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS series (
@@ -65,7 +65,7 @@ export class HistoryDatabase {
         // Raw history remains intact and rebuilds these derived rows on the next ingestion.
         this.db.exec("DELETE FROM minute_samples; DELETE FROM history_meta WHERE key='rollup_through';");
       }
-      this.db.exec('CREATE INDEX IF NOT EXISTS series_player ON series(playerId,kind,lastMs); PRAGMA user_version=3;');
+      this.db.exec('CREATE INDEX IF NOT EXISTS series_player ON series(playerId,kind,lastMs); PRAGMA user_version=4;');
     })();
     this.playerSessions = new PlayerSessions(this.db);
     this.lastRollup = (this.db.query("SELECT value FROM history_meta WHERE key='rollup_through'").get() as { value: number } | null)?.value ?? 0;
@@ -114,6 +114,20 @@ export class HistoryDatabase {
         compressionSavedKiB: improved ? (improved.rawPayloadBytes - improved.framedPayloadBytes) / 1024 : null,
         compressedSent: improved?.compressedSent, compressedReceived: improved?.compressedReceived, compressionRejected: improved?.compressionRejected,
         compressionEncodeP95Ms: improved?.compressionEncodeMs?.p95, compressionDecodeP95Ms: improved?.compressionDecodeMs?.p95, captainTransfers: improved?.captainTransfers,
+        freshPositions: improved?.network?.freshPositions,
+        positionFallbacks: improved?.network?.positionFallbacks,
+        actorBonuses: improved?.network?.actorBonuses,
+        vanillaPriorityPasses: improved?.network?.vanillaPriorityPasses,
+        earlyBuffered: improved?.network?.earlyBuffered,
+        earlyReplayed: improved?.network?.earlyReplayed,
+        earlyFailures: improved?.network?.earlyFailures,
+        mapSentBytes: improved?.network?.mapSentBytes,
+        mapReceivedBytes: improved?.network?.mapReceivedBytes,
+        mapPackets: improved?.network?.mapPackets,
+        mapSkipped: improved?.network?.mapSkipped,
+        mapRejected: improved?.network?.mapRejected,
+        earlyQueuedBytes: improved?.network?.earlyQueuedBytes,
+        mapCapablePeers: improved?.network?.mapCapablePeers,
         loadedObjects: snapshot.loadedObjects, worldSaving: snapshot.worldSaving == null ? null : Number(snapshot.worldSaving),
       }) });
       for (const p of snapshot.peers) {
@@ -263,7 +277,7 @@ export class HistoryDatabase {
     }
     const sessionIds = new Set(series.map(s=>s.sessionId).filter(Boolean));
     const sessions = [...sessionIds].map(s=>this.db.query('SELECT * FROM player_sessions WHERE id=?').get(s!)).filter(Boolean) as NonNullable<HistoryArchive['sessions']>;
-    return { version: 1, metricLayout: 2, fromMs, toMs, retainedFromMs: from, stepMs, series, rows, sessions,seriesTruncated: all.length > 64 };
+    return { version: 1, metricLayout: 3, fromMs, toMs, retainedFromMs: from, stepMs, series, rows, sessions,seriesTruncated: all.length > 64 };
   }
 
   status(now = Date.now()): HistoryStatus {

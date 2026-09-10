@@ -3,7 +3,7 @@
 <h1 align="center">valheim-boosted</h1>
 <p align="center"><strong>See what your connection is doing.</strong><br>0.2.0 · Pre-alpha · Valheim networking diagnostics</p>
 
-An in-game diagnostics HUD and a live server dashboard, built to help explain lag with measurements. This pre-alpha collects data and enables fair replication scheduling by default for dedicated Steam servers. Opt-in experiments add per-peer send allowances, Steam maximum-rate tuning, ship captain ownership and negotiated lossless compression.
+An in-game diagnostics HUD and a live server dashboard, built to help explain lag with measurements. This pre-alpha collects data and enables fair replication scheduling by default for dedicated Steam servers. Default-on experiments add adaptive send allowances, Steam rate tuning, captain ownership, lossless compression, actor priority and smoother map updates. Dedicated servers require public player locations by default; each feature has its own switch.
 
 | Play with context | See the server |
 | --- | --- |
@@ -44,14 +44,31 @@ Set `Enabled = false` and restart to use vanilla scheduling or collect a baselin
 
 ## Experimental stages 3–5
 
-| Stage | Behavior | Enable in `valheim.boosted.cfg` |
+| Stage | Behavior | Default in `valheim.boosted.cfg` |
 | --- | --- | --- |
 | **3 · Send windows** | Adapt per-peer ZDO allowances to RTT and unsent queue pressure | `[SendWindows] Enabled = true` |
 | **3 · Steam rate** | Raise connection maximums with readback and restoration | `[SteamRate] Enabled = true` |
 | **4 · Captain ownership** | Assign eligible vanilla ships to their granted, attached captain | `[CaptainOwnership] Enabled = true` |
 | **5 · Compression** | Negotiate lossless ZDO compression with compatible peers | `[Compression] Enabled = true` on both endpoints |
 
-**These new switches default to false and require a restart.** Stages 3–4 run on dedicated Steam servers; unmodded clients remain supported. The dashboard shows actual activation, per-peer settings, compression savings/cost and ship transfers, with report comparisons and seven-day history. General NPC ownership rebalancing remains future work; live multiplayer validation is pending. [Defaults, bounds and fallback behavior →](docs/SERVER-IMPROVEMENTS.md)
+**All four switches default to true in new configs.** Existing configs retain saved values; set their `Enabled` entries to `true` and restart to adopt these defaults, or use `false` to opt out individually. Compression still requires compatible, enabled peers to negotiate it. Stages 3–4 run on dedicated Steam servers; unmodded clients remain supported. The dashboard shows actual activation, per-peer settings, compression savings/cost and ship transfers, with report comparisons and seven-day history. General NPC ownership rebalancing remains future work; live multiplayer validation is pending. [Defaults, bounds and fallback behavior →](docs/SERVER-IMPROVEMENTS.md)
+
+## Replication and map improvements
+
+These additions also default to `true`. Add the mod to clients for connection buffering and smoother map markers; server-side relevance, priority and forced sharing work with unmodded players.
+
+```ini
+[Replication]
+FreshInterest = true
+ActorPriority = true
+EarlyZdoBuffer = true
+
+[Map]
+FastUpdates = true
+ForceLocationSharing = true
+```
+
+**Location sharing is required for everyone on a dedicated server by default**, even when a player's map toggle is off. Set `[Map] ForceLocationSharing = false` on the server and restart to restore voluntary sharing. Players' saved preferences are preserved. Fast map updates require client capability negotiation and yield to queued game traffic. [Configuration, limits and metrics →](docs/SERVER-IMPROVEMENTS.md#replication-and-map-improvements)
 
 ## Start the metrics server
 
@@ -141,9 +158,9 @@ Open [localhost:8080](http://127.0.0.1:8080) on the host. For an SSH host, forwa
 
 ### Compare a networking change
 
-1. On the overview, **Reset stats** after warm-up, run a repeatable scenario, name the recording and **Save report**.
+1. Open **Live → Overview → Save a report**. **Reset stats** after warm-up, run a repeatable scenario, name the recording and **Save report**.
 2. Apply your change, restart Valheim if required, reset stats and repeat with the same world, player count, activity and duration.
-3. Open **Compare reports** to choose a baseline and candidate, review measurement coverage and settings, and download either report as JSON.
+3. Open **Reports** to choose a baseline and candidate. Use **Show coverage** and **Recording details & settings** to inspect the comparison; either report can be downloaded as JSON.
 
 Reset affects the dashboard's unsaved aggregates and live charts for all viewers; it does not reset Valheim's counters or delete saved reports. Recording pauses when the game session or exported settings change. Unsaved recordings are lost when the metrics service restarts. [Report definitions and limitations →](docs/REPORTS.md)
 

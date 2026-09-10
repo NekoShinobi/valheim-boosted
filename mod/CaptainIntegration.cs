@@ -21,7 +21,7 @@ internal sealed class CaptainIntegration
     internal CaptainIntegration(ConfigFile config, TelemetryIntegration integration, Action<string> log)
     {
         this.log = log;
-        bool enabled = config.Bind("CaptainOwnership", "Enabled", false, "Experimental dedicated Steam server assignment of vanilla ships to their granted, attached captain. Restart required.").Value;
+        bool enabled = config.Bind("CaptainOwnership", "Enabled", true, "Experimental dedicated Steam server assignment of vanilla ships to their granted, attached captain. Restart required.").Value;
         feature = new FeatureStatus { id = "CaptainOwnership", enabled = enabled, status = !enabled ? "configured_disabled" : integration.GameSupported ? "available" : "blocked_compatibility" };
         integration.Features[feature.id] = feature;
         feature.target = "ZDO.SetOwner (granted ship captain)";

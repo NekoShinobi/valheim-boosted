@@ -1,8 +1,16 @@
-# Install valheim-boosted 0.1.0
+# Install valheim-boosted
 
 **Pre-alpha.** Thunderstore identifier: `valheim_boosted`. Import the release ZIP into a Valheim mod-manager profile, or follow the manual steps below. The package declares both dependencies in its manifest.
 
 Requires BepInExPack Valheim and Jötunn. This project builds with BepInExPack 5.4.2350 and Jötunn 2.30.0; confirm compatibility with your game build before use.
+
+## Gale local imports
+
+Use **Import → Local mod** with the regular `valheim-boosted-<version>.zip`. The `-plugins.zip` is for manual server installation and contains no mod-manager metadata. Importing a DLL alone also omits the author and icon.
+
+The regular ZIP includes a root `manifest.json` with `author: "NekoShinobi"` and a root 256×256 `icon.png`. Gale reads this optional author field for local imports; published Thunderstore ownership comes from the uploading team. Re-import the updated ZIP to refresh the author on an existing local entry. Editing the installed manifest alone does not update Gale's stored metadata. See Gale's [manifest model](https://github.com/Kesomannen/gale/blob/155645f8ad5cf818bf10173a999a2679f0e047df/src-tauri/src/thunderstore/models.rs#L159) and [local importer](https://github.com/Kesomannen/gale/blob/155645f8ad5cf818bf10173a999a2679f0e047df/src-tauri/src/profile/import/local.rs).
+
+For a missing icon, open the mod's directory from Gale and check `icon.png` beside `manifest.json`. With Gale 1.22.2 on Linux, the icon can be installed and its path stored correctly while the WebView cannot load it. Gale's [asset configuration](https://github.com/Kesomannen/gale/blob/155645f8ad5cf818bf10173a999a2679f0e047df/src-tauri/tauri.conf.json#L81) uses `scope: ["**"]`; Tauri's default Unix matching excludes hidden path segments such as `.local`, according to its [asset-scope documentation](https://v2.tauri.app/security/asset-protocol/#unix-path-segments-starting-with-). This is a likely manager-side cause when the saved path is valid; a WebView error is needed to confirm the runtime failure. Changing the mod's image or directory layout does not change Gale's asset permissions.
 
 ## Linux manual installation
 

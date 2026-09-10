@@ -26,7 +26,7 @@ python3 scripts/dev.py logs
 
 `Ctrl+Shift+B` builds in VS Code. Run Task -> Build and deploy also stages the DLL and PDB under `.local/profile/BepInEx/plugins/ValheimBoosted/`. Deploy refuses while a local Valheim process is running. It never copies game or framework DLLs into the plugin output. C# assembly changes require restarting the game.
 
-ValheimBoosted 0.1.0 provides an F8 diagnostics HUD and per-peer server telemetry snapshots. It observes networking without changing gameplay or send settings. See [OBSERVABILITY.md](OBSERVABILITY.md) for metric definitions, configuration, export format, and live verification steps. The display name is `valheim-boosted`, assembly/namespace `ValheimBoosted`, and plugin GUID `valheim.boosted`. CI is described in [CI.md](CI.md).
+The mod provides an F8 diagnostics HUD, server telemetry and configurable networking improvements. See [OBSERVABILITY.md](OBSERVABILITY.md) for metrics and [SERVER-IMPROVEMENTS.md](SERVER-IMPROVEMENTS.md) for feature settings. The display name is `valheim-boosted`, assembly/namespace `ValheimBoosted`, and plugin GUID `valheim.boosted`. CI is described in [CI.md](CI.md).
 
 ## Run the development profile
 
@@ -38,9 +38,9 @@ In Steam -> Valheim -> Properties -> Launch Options, enter:
 
 Replace the example path with your checkout path, or run `python3 scripts/dev.py doctor` to print the exact launch option. Then launch the native Linux game through Steam. This uses the workspace profile without installing BepInEx into the Steam game directory. Remove the launch option to return to ordinary Steam launching.
 
-Look for `valheim-boosted 0.1.0 loaded (build ...)` in `.local/profile/BepInEx/LogOutput.log`. Use a development character/world. Launching uses Valheim's normal save locations unless you configure a separate save directory. Breakpoint debugging and automatic code hot reload are not configured; portable symbols are retained for tooling.
+Look for `valheim-boosted <version> loaded (build ...)` in `.local/profile/BepInEx/LogOutput.log`. Use a development character/world. Launching uses Valheim's normal save locations unless you configure a separate save directory. Breakpoint debugging and automatic code hot reload are not configured; portable symbols are retained for tooling.
 
-The initial setup verifies compilation and deployment, not actual loading in the game. Verify loading after applying the Steam option.
+After applying the Steam launch option, confirm the plugin loaded in the profile log.
 
 ## Inspect and refresh game code
 

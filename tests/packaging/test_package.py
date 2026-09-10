@@ -46,6 +46,8 @@ class PackagingChecks(unittest.TestCase):
                 "BepInEx/plugins/ValheimBoosted/ValheimBoosted.pdb",
             })
             self.assertEqual(json.loads(archive.read("manifest.json"))["version_number"], self.version)
+            self.assertEqual(json.loads(archive.read("manifest.json"))["author"], "NekoShinobi")
+            self.assertEqual(archive.read("icon.png"), (self.root / "thunderstore/icon.png").read_bytes())
             self.assertEqual(archive.read("CHANGELOG.md"), (self.root / "CHANGELOG.md").read_bytes())
             self.assertIsNone(archive.testzip())
 
@@ -85,6 +87,23 @@ class PackagingChecks(unittest.TestCase):
         self.mutate_manifest("name", "valheim_boosted")
         self.mutate_manifest("version_number", "0.1.0-pre-alpha")
         with self.assertRaisesRegex(ValueError, "without suffixes"):
+            packager.validate(self.root)
+
+    def test_local_import_author_validation_and_legacy_manifest(self):
+        for author in (None, 123, "", " ", " NekoShinobi", "NekoShinobi\n", "Neko\tShinobi", "a" * 129):
+            with self.subTest(author=author):
+                self.mutate_manifest("author", author)
+                with self.assertRaisesRegex(ValueError, "author"):
+                    packager.validate(self.root)
+        path = self.root / "thunderstore/manifest.json"
+        manifest = json.loads(path.read_text())
+        del manifest["author"]
+        path.write_text(json.dumps(manifest))
+        self.assertNotIn("author", packager.validate(self.root))
+
+    def test_unknown_manifest_fields_still_rejected(self):
+        self.mutate_manifest("authors", ["NekoShinobi"])
+        with self.assertRaisesRegex(ValueError, "optional author only"):
             packager.validate(self.root)
 
     def test_version_and_tag_mismatch_rejected(self):

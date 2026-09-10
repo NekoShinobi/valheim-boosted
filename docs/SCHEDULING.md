@@ -1,6 +1,6 @@
 # Stage 2: fair replication scheduling
 
-Stage 2 enables an original fair scheduler by default for **dedicated Steam servers**, alongside replication and process diagnostics. Set `Scheduling.Enabled = false` and restart to capture a vanilla baseline. This is a pre-alpha implementation; automated checks do not establish multiplayer performance or gameplay acceptance.
+Stage 2 enables an original fair scheduler by default for **dedicated Steam servers**, alongside replication and process diagnostics. To capture a vanilla baseline, set `Scheduling.Enabled = false` and disable the four [Stage 3–5 switches](SERVER-IMPROVEMENTS.md#configuration-and-upgrades), then restart. This feature is experimental; compare its effect on your own workload.
 
 ## Configuration
 
@@ -47,12 +47,6 @@ The adapter requires supported game/protocol versions, exact scheduler/send sign
 | CPU / RSS / threads | Process CPU (100% = one core), resident memory including native allocations, and thread count. CPU is unavailable until a second sample. This is not container quota utilization. |
 | Frame p99 / long frames | Bounded-window p99, counts of frame intervals ≥50 and ≥100 ms; includes frame limiting and waits. |
 | Save timings | Game-reported elapsed and preparation times. Reported elapsed includes completion-notification delay and does not establish disk-write duration or save success. |
-| Mod build ID | Running mod assembly MVID, useful when testing several builds with version 0.1.0. |
+| Mod build ID | Identifies the running mod binary, including builds sharing a version number. |
 
-## Validation
-
-Automated checks exercise fairness under a saturated ten-peer workload, capped hitch debt, slow sends, disconnects/reconnects, duplicate eligibility, empty worlds, client/non-Steam fallback, patch conflicts, cleanup, and no replay of a failed partial round. Game-contract checks validate both client and dedicated-server reference assemblies. The dashboard validates optional new fields and still accepts older snapshots.
-
-For acceptance testing, use an isolated world and compare identical 2/4/8/10-player workloads with the scheduler off and on. Track service interval/age alongside send duration, frame p95/p99/max and limited-frame counts. Test a large join, teleport, disconnect/reconnect, a slow connection, explicit save/flush and shutdown. Verify world state and interactions, not only frame rate. A successful one-player idle session is not sufficient evidence of improvement.
-
-Container cgroup throttling, per-message oldest queue age and general NPC ownership reassignment remain future work. Targeted ship ownership and native rate/window experiments are described in [Stages 3–5](SERVER-IMPROVEMENTS.md). Optional [client performance reports](HISTORY.md) provide frame/CPU/GC and connection context through a separate bounded telemetry protocol; scheduler decisions do not depend on those self-reported measurements.
+For a before/after comparison, use the same world, player count and activity. Compare service age, queue delay, frame-time tails and interaction behavior. See [saved reports](REPORTS.md) and [player history](HISTORY.md).

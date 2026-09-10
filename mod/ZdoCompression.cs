@@ -94,7 +94,12 @@ internal sealed class ZdoCompression : IDisposable
         finally { decodeTime.Add((TelemetryCollector.Now - started) * 1000); }
         received++; feature.invocations++; if (feature.Collect) feature.status = "active";
         var manager = ZDOMan.instance;
-        if (manager != null) receive.Invoke(manager, new object[] { rpc, new ZPackage(raw) });
+        if (manager != null)
+        {
+            var decoded = new ZPackage(raw);
+            if (EarlyZdoIntegration.Current?.BufferCompressed(rpc, decoded) != true)
+                receive.Invoke(manager, new object[] { rpc, decoded });
+        }
     }
     internal void Invoke(ZRpc rpc, string method, object[] args)
     {

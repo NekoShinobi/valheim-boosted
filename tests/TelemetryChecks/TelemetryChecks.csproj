@@ -6,6 +6,8 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../mod/NetworkEnhancementPolicy.cs" Link="NetworkEnhancementPolicy.cs" />
+    <Compile Include="../../mod/MapPositionProtocol.cs" Link="MapPositionProtocol.cs" />
     <Compile Include="../../mod/SteamRateLease.cs" Link="SteamRateLease.cs" />
     <Compile Include="../../mod/ServerImprovementMetrics.cs" Link="ServerImprovementMetrics.cs" />
     <Compile Include="../../mod/SendWindowPolicy.cs" Link="SendWindowPolicy.cs" />

@@ -8,7 +8,7 @@
 </script>
 
 <section class="panel" id="runtime">
-  <div class="panel-heading"><div><h2>Server resources &amp; scheduling</h2><p class="muted">Counters cover the last {n(snapshot.sampleWindowSeconds, 2)} seconds. CPU measures this Valheim process; 100% is one occupied core.</p></div></div>
+  <div class="panel-heading"><div><h2>Resources</h2><p class="muted">Last {n(snapshot.sampleWindowSeconds, 2)} s · CPU: 100% = one core</p></div></div>
   <div class="detail-grid">
     <div><span>Process CPU</span><strong>{n(snapshot.resources?.cpuPercentOneCore)}%</strong></div>
     <div><span>Resident memory</span><strong>{n(snapshot.resources?.residentBytes == null ? null : snapshot.resources.residentBytes / 1048576)} MiB</strong></div>
@@ -19,25 +19,25 @@
     <div><span>Last save · reported elapsed</span><strong>{n(snapshot.lastSaveDurationMs)} ms</strong></div>
     <div><span>Save preparation</span><strong>{n(snapshot.lastSavePreparationMs)} ms</strong></div>
   </div>
-  <p class="runtime-note muted">Resources: {snapshot.resources?.status ?? 'not reported'}. Save elapsed includes the game's completion-notification delay; it is not disk-write time.</p>
+  <details class="measurement-notes"><summary>Resource measurements</summary><p>Resources: {snapshot.resources?.status ?? 'not reported'}. Save elapsed includes the game's completion-notification delay; it is not disk-write time.</p></details>
   {#if snapshot.scheduler}
-    <div class="panel-heading"><div><h2>Fair scheduler · {snapshot.scheduler.status}</h2><p class="muted">{snapshot.scheduler.enabled ? 'Experimental scheduler configured on' : 'Vanilla scheduling configured'} · {snapshot.scheduler.targetHz} Hz target · {snapshot.scheduler.maxCallsPerFrame} calls/frame · {snapshot.scheduler.budgetMs} ms soft budget · debt cap {snapshot.scheduler.debtCap}/peer</p></div></div>
+    <div class="panel-heading"><div><h2>Fair scheduler · {snapshot.scheduler.status}</h2><p class="muted">{snapshot.scheduler.enabled ? 'Experimental · enabled' : 'Vanilla scheduling'} · {snapshot.scheduler.targetHz} Hz target · {snapshot.scheduler.maxCallsPerFrame} calls/frame · {snapshot.scheduler.budgetMs} ms soft budget · debt cap {snapshot.scheduler.debtCap}/peer</p></div></div>
     <div class="detail-grid">
       <div><span>Scheduled calls</span><strong>{n(snapshot.scheduler.calls, 0)}</strong></div>
       <div><span>Pending service credit</span><strong>{n(snapshot.scheduler.pendingDebt)}</strong></div>
       <div><span>Time / work limited frames</span><strong>{n(snapshot.scheduler.timeLimitedFrames, 0)} / {n(snapshot.scheduler.workLimitedFrames, 0)}</strong></div>
       <div><span>Scheduler work p95 / max</span><strong>{n(snapshot.scheduler.frameWorkMs?.p95)} / {n(snapshot.scheduler.frameWorkMs?.max)} ms</strong></div>
     </div>
-    <p class="runtime-note muted">Eligible peers: {snapshot.scheduler.eligiblePeers}. Discarded catch-up credit: {n(snapshot.scheduler.discardedDebt)}. A single send cannot be interrupted and may exceed the time budget. Service credit is not queued network data.</p>
+    <details class="measurement-notes"><summary>Scheduler measurements</summary><p>Eligible peers: {snapshot.scheduler.eligiblePeers}. Discarded catch-up credit: {n(snapshot.scheduler.discardedDebt)}. A single send cannot be interrupted and may exceed the time budget. Service credit is not queued network data.</p></details>
   {/if}
 </section>
 <div class="charts"><MetricChart title="Valheim process CPU" unit="%" series={cpu} /><MetricChart title="Replication service age" unit="ms" series={age} /></div>
 <section class="panel" id="replication">
-  <div class="panel-heading"><div><h2>Replication &amp; heartbeat</h2><p class="muted">These measurements do not depend on a successful native Steam status query. Send opportunities are not delivery acknowledgments.</p></div></div>
+  <div class="panel-heading"><div><h2>Replication &amp; heartbeat</h2></div></div>
   <div class="table-scroll"><table><thead><tr><th>Peer session</th><th>Heartbeat age</th><th>Service age</th><th>Service interval p95</th><th>Send work p95</th><th>Attempts / batches</th><th>Empty or deferred / errors</th><th>ZDOs sent</th><th>Payload received</th><th>Queued packets / bytes</th><th>Queue growth</th><th>Queue nonempty</th><th>Health probe</th></tr></thead><tbody>
     {#each snapshot.peers as peer (peer.peerSessionId)}
       <tr><td>{peer.peerSessionId}</td><td>{n(peer.heartbeatAgeSeconds)} s</td><td>{n(peer.replication?.serviceAgeSeconds)} s</td><td>{n(peer.replication?.serviceIntervalMs?.p95)} ms</td><td>{n(peer.replication?.sendDurationMs?.p95)} ms</td><td>{n(peer.replication?.sendAttempts, 0)} / {n(peer.replication?.sentBatches, 0)}</td><td>{n(peer.replication?.noDataOrDeferred, 0)} / {n(peer.replication?.sendFailures, 0)}</td><td>{n(peer.replication?.sentZdos, 0)}</td><td>{n(peer.replication?.receivedPayloadBytes == null ? null : peer.replication.receivedPayloadBytes / 1024)} KiB</td><td>{n(peer.applicationQueuedPackets, 0)} / {n(peer.applicationQueuedBytes, 0)}</td><td>{n(peer.applicationQueueGrowthBytesPerSecond)} B/s</td><td>{n(peer.applicationQueueNonemptySeconds)} s</td><td>{peer.connectionHealthStatus ?? 'not reported'}</td></tr>
     {:else}<tr><td colspan="13" class="empty">Awaiting a ready peer.</td></tr>{/each}
   </tbody></table></div>
-  <p class="runtime-note muted">Heartbeat age is the game's elapsed time since a reply, not RTT. A false send result combines no relevant changes with queue deferral. Queue nonempty duration is sampled continuously nonempty time, not the age of an individual packet.</p>
+  <details class="measurement-notes"><summary>Replication measurements</summary><p>These counters are independent of native Steam status. Send opportunities are not delivery acknowledgments. Heartbeat age is the game's elapsed time since a reply, not RTT. A false send result combines no relevant changes with queue deferral. Queue nonempty duration is sampled continuously nonempty time, not the age of an individual packet.</p></details>
 </section>

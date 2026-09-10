@@ -90,19 +90,11 @@ Press **F9** to mark a lag incident. The timestamp is when the client processes 
 
 Compare client performance, server frame intervals, RTT and replication activity around that time. Focus loss, frame caps, loading, GC and a shared busy scene can explain coincident slowdowns. Correlation alone does not identify who caused lag, and this version does not collect simulation ownership or nearby-player context.
 
-## Persistent data model
+## Stored history
 
-SQLite runs in a Bun worker in the metrics service, outside both Valheim and the HTTP event loop. The HTTP process allows one in-flight history ingestion plus one pending snapshot; newer snapshots replace the pending offer if storage falls behind. This bounds backlog memory and exposes an offer-replacement counter. The mod's recent-client buffer tolerates some missed polls, while missing server snapshots remain gaps.
+History is stored in SQLite by the metrics service, outside Valheim. If storage falls behind, newer pending snapshots can replace older ones; the history page reports dropped offers, and missing samples remain gaps.
 
-| Table | Identity and contents |
-| --- | --- |
-| `series` | Hashed process/world/kind/source identity; perspective, player/session IDs, peer session, display name, build ID, configuration and compatibility metadata, first/last observation |
-| `player_sessions` | One connection per process/world/stream; server-scoped player ID, character label, first/last observation, explicit or inferred ending |
-| `samples` | Unique `(series_id, sequence)`; start/end/receipt times, clock uncertainty, marker/worst-frame time, and a fixed ordered metric array |
-| `minute_samples` | Unique `(series_id, minute)`; aggregates, metric weights, observed duration and sample count |
-| `history_meta` | Last completed rollup watermark; database format also uses SQLite `user_version` |
-
-Server measurements and server-observed connections have separate series. Each client connection receives a fresh stream ID, so reconnecting client sequence numbers do not overwrite an earlier stream. A server process/world change also produces new series. Both client and server connection perspectives use that stream, with the game's peer ID retained as metadata. Legacy snapshots without stream metadata fall back to the old peer-based connection series. Repeated samples in successive JSON exports are deduplicated. The schema-2 migration adds identities and sessions in place and rebuilds derived minute summaries from retained raw samples to preserve fractional weighted averages. Schema 3 preserves that data and appends metric layout 2 for server improvements; existing 26-value rows and layout-1 archives remain valid. Missing appended metrics stay null, and old rollup weights contribute no observations to new metrics.
+Server, client and server-observed connection measurements are separate perspectives. Reconnecting creates a new session, while the same server-scoped player identity allows history to combine returning players. Repeated samples are deduplicated. Older histories remain readable; missing metrics and identities are left unavailable.
 
 The database retains detailed samples for the entire configured retention period. Closed-minute summaries make wider queries cheaper; the last five minutes and partial range boundaries use detailed samples so delayed batches and boundary filtering remain accurate. A minute is assigned by window end, and aggregates retain observed durations rather than pretending every bucket has complete coverage.
 
@@ -112,16 +104,14 @@ Cleanup runs at startup and approximately once a minute, including when no game 
 
 History queries return at most nine series (individual or grouped) and roughly 1,200 points per series. Series and session listings show up to 256 matches; narrow the range to find older sessions. Database failures appear in history status while the live dashboard and aggregate report functionality remain available. LayerChart renders the Svelte graphs with linked hover positions, clickable time selection and per-series legend controls; missing intervals stay empty and chart animation is disabled.
 
-For a capacity example, a local synthetic run with ten reporting players, their ten server-observed connections and one server series produced 75,600 detailed rows over one hour of one-second windows. The database occupied about 21.9 MiB including minute summaries, extrapolating to roughly 3.6 GiB for seven continuously populated days with the same data shape. Actual values, connection churn, WAL activity and sampling configuration change that footprint. This is a sizing example, not a disk quota or a live-game performance benchmark.
-
-## Reports and validation
+## Saved reports
 
 **Reset stats** starts a new comparison recording without deleting history. **Save report** preserves the aggregate recording plus a bounded timeline archive of the matching server process/world. Saved timelines retain all supported metric columns, up to 64 series and about 2,400 aggregate rows; the server perspective is prioritized. They retain the first marker per series/bucket and expose their coarser resolution. Saved archives live in the report JSON and survive live retention cleanup. See [reports](REPORTS.md) for archive limits and comparison semantics.
 
 Saved timelines also include session records and per-metric weights, so grouping several logins preserves correct averages. An archive remains scoped to its recording's server process/world. Older archives lack some weights and account IDs; their original individual series remain readable, and whole-range means that cannot be reconstructed accurately are left unavailable.
 
-Managed tests exercise the actual binary transport using a queued pair of RPC fixtures, including clock alignment, malformed/replayed packets, congestion, feature switches, identity persistence and reconnect cleanup. The per-frame transport fast path is checked for managed allocations. Dashboard tests exercise real SQLite ingestion, weighted minute rollups and cross-login totals, name collisions, migration, retention, restart persistence and report archives. These checks do not replace profiling a live multiplayer session: the full collector, periodic serialization, Steam transport and database still have measurable costs.
-
 ## Server improvement history
 
-The metric selector includes per-connection ZDO allowance (KiB), effective Steam maximum rate (KiB/s), cumulative rate failures (maximum across the range), and server compression bytes saved (KiB per bucket), frame counts, rejected messages, worst-window encode/decode p95 and ship transfers. Counters sum observed windows; timing percentiles use the largest window value, never an invented whole-range percentile. New fields are appended to the packed metric list so older values retain their indices. New archives declare `metricLayout: 2`; earlier archives remain readable. Server/series metadata also records experiment settings for attribution. See [Stages 3–5](SERVER-IMPROVEMENTS.md).
+The metric selector includes per-connection ZDO allowance (KiB), effective Steam maximum rate (KiB/s), cumulative rate failures (maximum across the range), and server compression bytes saved (KiB per bucket), frame counts, rejected messages, worst-window encode/decode p95 and ship transfers. Counters sum observed windows; timing percentiles use the largest window value, never an invented whole-range percentile. Older archives remain readable with missing metrics left unavailable. Saved metadata records the feature settings for comparison. See [Stages 3–5](SERVER-IMPROVEMENTS.md).
+
+Replication selection/priority counts, early connection-buffer activity, map payload bytes, deferred/rejected map sends and capable-client counts are also available. Counts sum observed windows; queue size uses its maximum and capable-client count uses its observed mean. Earlier samples remain unavailable for these metrics. See [replication and map improvements](SERVER-IMPROVEMENTS.md#replication-and-map-improvements).

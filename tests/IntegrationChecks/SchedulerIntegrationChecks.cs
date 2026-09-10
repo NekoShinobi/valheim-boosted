@@ -21,6 +21,10 @@ internal static class SchedulerIntegrationChecks
     {
         ZNet.instance = new ZNet();
         var config = new BepInEx.Configuration.ConfigFile();
+        // This scheduler fixture has no real serializer IL. Send transforms are
+        // checked against actual game assemblies in GameContractChecks.
+        foreach (var section in new[] { "SendWindows", "SteamRate", "Compression" })
+            config.Switches[section + ".Enabled"] = false;
         using (var telemetry = new TelemetryIntegration(config, _ => { }))
         {
             var game = new ZDOMan(); var peer = new ZNetPeer(); game.Peers.Add(new ZDOMan.ZDOPeer { m_peer = peer });

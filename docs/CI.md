@@ -98,22 +98,8 @@ Requirements: [Creating a package](https://wiki.thunderstore.io/mods/creating-a-
 
 On successful main/tag/manual runs and `release: published` events (including pre-releases), it publishes to `ghcr.io/<lowercase-owner>/valheim-boosted-metrics`. Pull requests only build and smoke-test. Images receive branch/SHA tags; default-branch builds also receive `latest`, and semver tags produce version tags. `latest` remains the main-branch channel: numeric release/pre-release builds do not overwrite it through automatic semver tagging. GitHub's GITHUB_TOKEN provides registry credentials with packages:write only for the image job. Repository/organization policy must allow that package write. Make package visibility appropriate for where you intend to pull it.
 
-The image contains Bun, the compiled Svelte UI, and the small TypeScript API. It does not contain Valheim or game references. Docker is not installed on this development host, so the container build/smoke checks await a workflow runner or Docker-enabled host; the same Bun server/frontend were exercised locally.
+The image contains Bun, the compiled Svelte UI, and the TypeScript API. It does not contain Valheim or game references. Local image builds require Docker.
 
-## Action versions
+## Updating actions
 
-Latest stable releases were checked on 2026-09-09 against each action's GitHub latest-release page, and tag commits verified with git ls-remote. Workflows pin those immutable commit IDs, with version comments. Dependabot proposes subsequent action updates weekly; it also checks npm and Docker dependencies. Update this audit table when applying those PRs.
-
-`actions/download-artifact` was added on 2026-09-10 using the latest stable v8.0.1 and its [release commit](https://github.com/actions/download-artifact/commit/3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c). Release preparation uses `skip-decompress: true` for the existing `archive: false` uploads and fails on digest mismatch.
-
-| Action | Verified release |
-| --- | --- |
-| actions/checkout | [v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1) |
-| actions/setup-dotnet | [v6.0.0](https://github.com/actions/setup-dotnet/releases/tag/v6.0.0) |
-| actions/upload-artifact | [v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1) |
-| actions/download-artifact | [v8.0.1](https://github.com/actions/download-artifact/releases/tag/v8.0.1) |
-| oven-sh/setup-bun | [v2.2.0](https://github.com/oven-sh/setup-bun/releases/tag/v2.2.0) |
-| docker/setup-buildx-action | [v4.3.0](https://github.com/docker/setup-buildx-action/releases/tag/v4.3.0) |
-| docker/build-push-action | [v7.3.0](https://github.com/docker/build-push-action/releases/tag/v7.3.0) |
-| docker/login-action | [v4.6.0](https://github.com/docker/login-action/releases/tag/v4.6.0) |
-| docker/metadata-action | [v6.2.0](https://github.com/docker/metadata-action/releases/tag/v6.2.0) |
+Third-party actions are pinned to full commit SHAs, with version comments in [the workflows](../.github/workflows/). Dependabot proposes weekly action updates and also checks npm and Docker dependencies. Review the release notes and workflow results before merging an update.

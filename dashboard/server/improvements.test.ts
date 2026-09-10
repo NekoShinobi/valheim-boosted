@@ -63,7 +63,7 @@ test('v2 histories with 26-value rollups migrate without data loss; appended met
     db.ingest(improvementSnapshot(3, now - 1000), now);
     const result = db.query(q, now); expect(result.series[0].summary?.value).toBe(8);
     const archive = db.archive(at - 10000, now, old.processSession, old.worldSession, now);
-    expect(validHistoryArchive(archive)).toBe(true); expect(archive.metricLayout).toBe(2);
+    expect(validHistoryArchive(archive)).toBe(true); expect(archive.metricLayout).toBe(3);
     const historical = archiveHistory(archive, [server], 'compressionSavedKiB', archive.fromMs, archive.toMs);
     expect(historical.series[0].summary?.value).toBe(8);
     const oldArchive = structuredClone(archive); delete oldArchive.metricLayout;
@@ -73,5 +73,43 @@ test('v2 histories with 26-value rollups migrate without data loss; appended met
     expect(historyMetrics.findIndex(m => m.key === 'vSyncCount')).toBe(25);
     const connection = db.series(at - 10000, now, now).find(s => s.kind === 'connection')!;
     expect(db.query({ ...q, seriesIds: [connection.id], metric: 'sendWindowKiB' }, now).series[0].summary?.value).toBe(32);
+  } finally { db.close(); await rm(dir, { recursive: true }); }
+});
+
+
+test('network additions validate, aggregate window counts and preserve layout-2 archives and v3 databases', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'vb-network-history-')); const path = join(dir, 'history.sqlite');
+  const now = Date.now(), at = now - 3600000;
+  let db = new HistoryDatabase(path);
+  try {
+    const old = improvementSnapshot(1, at); db.ingest(old, at);
+    const archive2 = db.archive(at - 1000, at + 1000, old.processSession, old.worldSession, at + 1000);
+    archive2.metricLayout = 2;
+    for (const row of archive2.rows) { row.values = row.values.slice(0, 36); row.weights = row.weights?.slice(0, 36); }
+    expect(validHistoryArchive(archive2)).toBe(true);
+    db.close(); const legacy = new Database(path); legacy.exec('PRAGMA user_version=3;'); legacy.close();
+    db = new HistoryDatabase(path);
+    const s = improvementSnapshot(2, now - 1000);
+    s.serverImprovements!.network = { freshPositions: 10, positionFallbacks: 5, actorBonuses: 100, vanillaPriorityPasses: 5,
+      earlyBuffered: 4, earlyReplayed: 3, earlyFailures: 0, earlyQueuedBytes: 100, forcedSharing: true, mapCapablePeers: 1,
+      mapSentBytes: 512, mapReceivedBytes: 14, mapPackets: 2, mapSkipped: 0, mapRejected: 0 };
+    expect(parseSnapshot(s)).toBe(s);
+    for (const changes of [{ mapSentBytes: -1 }, { mapCapablePeers: 65 }, { earlyQueuedBytes: 2097153 }, { forcedSharing: 1 }, { actorBonuses: NaN }])
+      expect(() => parseSnapshot({ ...s, serverImprovements: { ...s.serverImprovements, network: { ...s.serverImprovements!.network, ...changes } } })).toThrow('server improvements');
+    db.ingest(s, now); const next = structuredClone(s); next.sequence++; next.clockUtcMs = now; next.capturedAtUtc = new Date(now).toISOString();
+    next.serverImprovements!.network!.mapSentBytes = 256; db.ingest(next, now);
+    const server = db.series(at - 1000, now, now).find(row => row.kind === 'server')!;
+    const query = { fromMs: at - 1000, toMs: now, seriesIds: [server.id], metric: 'mapSentBytes' as const, points: 10 };
+    expect(db.query(query, now).series[0].summary?.value).toBe(768);
+    expect(archiveHistory(archive2, archive2.series, 'mapSentBytes', archive2.fromMs, archive2.toMs).series[0].summary?.value).toBeNull();
+    const archive3 = db.archive(at - 1000, now, old.processSession, old.worldSession, now);
+    expect(archive3.metricLayout).toBe(3); expect(validHistoryArchive(archive3)).toBe(true);
+    expect(archiveHistory(archive3, [server], 'mapSentBytes', archive3.fromMs, archive3.toMs).series[0].summary?.value).toBe(768);
+    const recording = new Recording(); recording.accept(s, true); recording.accept(next, true);
+    const report = recording.report('Network additions', 'live');
+    expect(report.metrics.mapSentBytes?.total).toBe(768); expect(report.metrics.mapSentBytes?.availableSeconds).toBe(2);
+    expect(report.metrics.earlyQueuedBytes?.max).toBe(100); expect(report.metrics.actorBonuses?.total).toBe(200);
+    const repository = new ReportRepository(dir); const saved = await repository.save(report);
+    expect((await repository.get(saved.id))?.metrics.mapSentBytes?.total).toBe(768);
   } finally { db.close(); await rm(dir, { recursive: true }); }
 });

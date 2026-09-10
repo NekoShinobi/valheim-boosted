@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DashboardShell from './DashboardShell.svelte';
   import { onMount } from 'svelte';
   import { comparisonWarnings, metricValue, reportMetrics, type ReportSummary, type SavedReport } from '../shared/reports';
   let reports = $state<ReportSummary[]>([]);
@@ -11,6 +12,7 @@
   let error = $state('');
   let unreadable = $state(0);
   let showUnavailable = $state(false);
+  let showCoverage = $state(false);
   const visibleMetrics = $derived(reportMetrics.filter(d => showUnavailable || a?.metrics[d.id] || b?.metrics[d.id]));
   const warnings = $derived(a && b ? comparisonWarnings(a, b) : []);
   const number = (n: number | null | undefined) => n == null ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -71,23 +73,14 @@
 </script>
 
 <svelte:head><title>Reports · valheim-boosted</title></svelte:head>
-<div class="shell">
-  <aside class="sidebar">
-    <div class="brand-mark">VB<span>↗</span></div>
-    <div><strong>valheim-boosted</strong><p class="muted">World observability</p></div>
-    <a href="/">◈ <span>Overview</span></a>
-    <a class="nav-active" href="/reports">▤ <span>Reports</span></a>
-    <a href="/history">◷ <span>History</span></a>
-    <div class="sidebar-footer"><span class="eyebrow">BEFORE &amp; AFTER</span><p>Match the world, player activity and recording length. Change one setting at a time.</p></div>
-  </aside>
-  <main>
-    <header><div><p class="eyebrow">FROM GUESSWORK TO EVIDENCE</p><h1>Compare reports</h1><p class="muted">Saved measurements, with the context behind each change.</p></div><a class="outline" href="/">← Live overview</a></header>
+<DashboardShell page="reports">
+    <header class="page-heading"><h1>Compare reports</h1><span class="muted">{reports.length} saved</span></header>
     {#if error}<p class="notice" role="alert">{error} <a href="/reports">Reload reports</a></p>{/if}
-    {#if unreadable}<p class="notice">{unreadable} stored report(s) could not be read. Check the JSON files in the server's reports directory.</p>{/if}
+    {#if unreadable}<p class="notice">{unreadable} stored report(s) could not be read. Check the reports directory.</p>{/if}
     <section class="panel">
-      <div class="panel-heading"><div><h2>Choose your recordings</h2><p class="muted">{reports.length} saved reports · changes are candidate minus baseline</p></div></div>
+      <div class="panel-heading"><div><h2>Recordings</h2><p class="muted">Change = candidate − baseline</p></div></div>
       {#if loading}<p class="empty">Loading reports…</p>
-      {:else if !reports.length}<div class="empty">No reports saved yet. Name and save a recording on the <a href="/">live overview</a>, then reset stats for your next test.</div>
+      {:else if !reports.length}<div class="empty">No reports saved yet. Save a recording from the <a href="/">live overview</a>.</div>
       {:else}<div class="report-selectors">
         <label><span id="baseline-label">Baseline</span><select aria-labelledby="baseline-label" bind:value={baseline}><option value="">Choose a report</option>{#each reports as r}<option value={r.id}>{r.name} · {date(r.savedAtUtc)}</option>{/each}</select></label>
         <label><span id="candidate-label">Candidate</span><select aria-labelledby="candidate-label" bind:value={candidate}><option value="">Choose a report</option>{#each reports as r}<option value={r.id}>{r.name} · {date(r.savedAtUtc)}</option>{/each}</select></label>
@@ -99,8 +92,9 @@
         {#if slot.report}{@const r = slot.report}
           <section class="panel report-context">
             <div class="panel-heading"><div><p class="eyebrow">{slot.title}</p><h2>{r.name}</h2></div><a class="outline" href={`/api/reports/${r.id}/download`}>JSON ↓</a></div>
-            <dl>
-              {#if r.timeline}<dt>Saved history</dt><dd><a class="outline" href={`/history?report=${r.id}`}>Open timeline ↗</a></dd>{:else if r.timelineError}<dt>Saved history</dt><dd>{r.timelineError}</dd>{/if}
+            <div class="recording-facts"><p>{date(r.startedAtUtc)} → {date(r.endedAtUtc)}</p><p>{number(r.observedSeconds)} s observed · {r.snapshots} samples · {number(r.metrics.peers?.mean)} mean peers</p>{#if r.timeline}<a class="outline" href={`/history?report=${r.id}`}>View timeline ↗</a>{/if}</div>
+            <details><summary>Recording details &amp; settings</summary><dl>
+              {#if r.timelineError}<dt>Saved history</dt><dd>{r.timelineError}</dd>{/if}
               <dt>Recorded</dt><dd>{date(r.startedAtUtc)} → {date(r.endedAtUtc)}</dd>
               <dt>Coverage</dt><dd>{number(r.observedSeconds)} observed / {number(r.elapsedSeconds)} elapsed seconds · {r.snapshots} snapshots · {r.missedSnapshots} missed</dd>
               <dt>Peer count</dt><dd>{number(r.metrics.peers?.mean)} mean · {number(r.metrics.peers?.min)}–{number(r.metrics.peers?.max)} range</dd>
@@ -118,7 +112,7 @@
               {/if}
               <dt>Feature switches</dt><dd>{r.source.features.map(f => `${f.id}: ${f.enabled ? 'on' : 'off'}`).join(' · ') || 'Not reported'}</dd>
               <dt>At save</dt><dd>{r.telemetryStatus}{r.pausedReason ? ' · recording paused at session/settings change' : ''}</dd>
-            </dl>
+            </dl></details>
           </section>
         {/if}
       {/each}
@@ -126,20 +120,19 @@
     {#if warnings.length}<div class="notice comparison-warnings"><strong>Comparison context</strong><ul>{#each warnings as warning}<li>{warning}</li>{/each}</ul></div>{/if}
     {#if a || b}
       <section class="panel">
-        <div class="panel-heading measurement-heading"><div><h2>Measurements</h2><p class="muted">Differences describe observations; they do not establish the cause of a change.</p></div><label class="checkbox-label"><input type="checkbox" bind:checked={showUnavailable} />Show unavailable metrics</label></div>
+        <div class="panel-heading measurement-heading"><div><h2>Measurements</h2><p class="muted">Observed differences; not proof of cause.</p></div><div class="measurement-options"><label class="checkbox-label"><input type="checkbox" bind:checked={showCoverage} />Show coverage</label><label class="checkbox-label"><input type="checkbox" bind:checked={showUnavailable} />Show unavailable metrics</label></div></div>
         <div class="table-scroll"><table class="comparison-table"><thead><tr><th>Metric</th><th>Baseline</th><th>Candidate</th><th>Change</th></tr></thead><tbody>
           {#each visibleMetrics as definition}
             {@const left = a ? metricValue(a, definition) : null}
             {@const right = b ? metricValue(b, definition) : null}
             <tr><td>{definition.label}<small>{definition.unit || 'count'}</small></td>
-              <td>{number(left)}<small>{a ? coverage(a, definition.id) : 'No report selected'}</small>{#if definition.mode === 'rate' && a?.metrics[definition.id]}<small>{number(a.metrics[definition.id]!.total)} observed total</small>{/if}</td>
-              <td>{number(right)}<small>{b ? coverage(b, definition.id) : 'No report selected'}</small>{#if definition.mode === 'rate' && b?.metrics[definition.id]}<small>{number(b.metrics[definition.id]!.total)} observed total</small>{/if}</td>
+              <td>{number(left)}{#if showCoverage}<small>{a ? coverage(a, definition.id) : 'No report selected'}</small>{/if}{#if showCoverage && definition.mode === 'rate' && a?.metrics[definition.id]}<small>{number(a.metrics[definition.id]!.total)} observed total</small>{/if}</td>
+              <td>{number(right)}{#if showCoverage}<small>{b ? coverage(b, definition.id) : 'No report selected'}</small>{/if}{#if showCoverage && definition.mode === 'rate' && b?.metrics[definition.id]}<small>{number(b.metrics[definition.id]!.total)} observed total</small>{/if}</td>
               <td>{delta(left, right)}</td></tr>
           {/each}
         </tbody></table></div>
       </section>
-      <p class="muted">Timing means are weighted by event counts. Other means use available observations; peer means pool connected peers. Counter rates use observed seconds with measurements. Missing values stay unavailable. Worst-window p95/p99 are the highest exported window percentiles, not whole-recording percentiles. Reports summarize the full window independently of the bounded live charts.</p>
+      <details class="measurement-notes"><summary>How comparisons are calculated</summary><p>Timing means are weighted by event counts. Other means use available observations; peer means pool connected peers. Counter rates use observed seconds with measurements. Missing values stay unavailable. Worst-window p95/p99 are the highest exported window percentiles, not whole-recording percentiles. Reports summarize the full window independently of the bounded live charts.</p></details>
     {/if}
-    <footer><span>valheim-boosted / Reports</span><span>Saved on the metrics server · Share this page's URL or download JSON</span></footer>
-  </main>
-</div>
+
+</DashboardShell>

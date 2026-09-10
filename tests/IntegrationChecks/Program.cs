@@ -10,15 +10,23 @@ public static class Version { public static System.Version CurrentVersion => new
 public sealed class ZNet {
     public static ZNet instance;
     public bool Dedicated = true;
+    public bool Server = true;
+    public bool IsServer() => Server;
+    public ZNetPeer GetServerPeer() => Peers.Find(p => p.m_server && p.Ready);
+    public struct PlayerInfo { public ZDOID m_characterID; public UnityEngine.Vector3 m_position; public bool m_publicPosition; }
     public readonly List<ZNetPeer> Peers = new List<ZNetPeer>();
     public List<ZNetPeer> GetPeers() => Peers;
     public ZNetPeer GetPeer(long uid) => Peers.Find(p => p.m_uid == uid);
     public bool IsDedicated() => Dedicated;
     public static implicit operator bool(ZNet value) => value != null;
 }
-public class TestSocket { public bool Connected = true; public bool IsConnected() => Connected; public void Close() => Connected = false; }
+public class TestSocket { public bool Connected = true; public int QueueBytes; public int GetSendQueueSize() => QueueBytes; public bool IsConnected() => Connected; public void Close() => Connected = false; }
 public sealed class ZSteamSocket : TestSocket { }
-public sealed class ZNetPeer { public long m_uid = 1; public ZRpc m_rpc = new ZRpc(); public TestSocket m_socket = new ZSteamSocket(); public bool Ready = true; public bool IsReady() => Ready; }
+public sealed class ZNetPeer { public long m_uid = 1; public ZRpc m_rpc = new ZRpc(); public TestSocket m_socket = new ZSteamSocket(); public bool Ready = true; public bool IsReady() => Ready;
+    public bool m_server, m_publicRefPos; public ZDOID m_characterID; public UnityEngine.Vector3 m_refPos; }
+public struct ZDOID { public long UserID; public uint ID; public bool IsNone() => UserID == 0 || ID == 0; }
+public static class Game { public static bool m_noMap; }
+public sealed class Minimap { }
 public sealed class ZRpc {
     public readonly List<Tuple<string, object[]>> Sent = new List<Tuple<string, object[]>>();
     public readonly Dictionary<string, Action<ZRpc, ZPackage>> Handlers = new Dictionary<string, Action<ZRpc, ZPackage>>();
@@ -59,11 +67,17 @@ namespace BepInEx.Configuration {
         public bool Enabled = true;
         public bool? Scheduling;
         public HashSet<string> Disabled = new HashSet<string>();
-        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = typeof(T) == typeof(bool) ? (T)(object)(section == "Scheduling" ? (Scheduling ?? (bool)(object)value) : section == "Features" ? Enabled && !Disabled.Contains(key) : (bool)(object)value) : value };
+        public Dictionary<string, bool> Switches = new Dictionary<string, bool>();
+        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = typeof(T) == typeof(bool) ? (T)(object)(Switches.TryGetValue(section + "." + key, out bool saved) ? saved : section == "Scheduling" ? (Scheduling ?? (bool)(object)value) : section == "Features" ? Enabled && !Disabled.Contains(key) : (bool)(object)value) : value };
         public ConfigEntry<T> Bind<T>(string section, string key, T value, ConfigDescription description) => new ConfigEntry<T> { Value = value };
     }
 }
 namespace ValheimBoosted {
+    internal sealed class EarlyZdoIntegration {
+        internal static EarlyZdoIntegration Current;
+        internal Func<ZRpc, ZPackage, bool> Buffer;
+        internal bool BufferCompressed(ZRpc rpc, ZPackage package) => Buffer?.Invoke(rpc, package) == true;
+    }
     public static class Plugin { public const string PluginVersion = "test"; public const string PluginGuid = "valheim.boosted.integration-tests"; }
     internal static class SteamMetrics {
         internal static string Initialize() => "fixture";
@@ -144,6 +158,7 @@ internal static class Program {
         }
         SchedulerIntegrationChecks.Run(Check);
         CompressionIntegrationChecks.Run(Check);
+        MapIntegrationChecks.Run(Check);
         Console.WriteLine($"PASS: {checks} Harmony integration checks."); return 0;
     }
 }

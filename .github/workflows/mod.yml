@@ -67,6 +67,8 @@ jobs:
           mono tests/IntegrationChecks/bin/Debug/net48/IntegrationChecks.exe
           dotnet build tests/GameContractChecks/GameContractChecks.csproj -p:RestoreLockedMode=true
           mono tests/GameContractChecks/bin/Debug/net48/GameContractChecks.exe .local/references/Managed
+          dotnet build tests/NetworkIntegrationChecks/NetworkIntegrationChecks.csproj -p:RestoreLockedMode=true
+          mono tests/NetworkIntegrationChecks/bin/Debug/net48/NetworkIntegrationChecks.exe .local/references/Managed
           dotnet restore mod/ValheimBoosted.csproj --locked-mode
           dotnet build mod/ValheimBoosted.csproj --configuration Release --no-restore
           if [ -n "$RELEASE_TAG" ]; then

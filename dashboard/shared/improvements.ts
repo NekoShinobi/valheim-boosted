@@ -4,7 +4,14 @@ export interface ImprovementSettings {
   windowsEnabled: boolean; rateEnabled: boolean; captainEnabled: boolean; compressionEnabled: boolean;
   targetBytesPerSecond: number; maximumWindowBytes: number; requestedMaxRateBytesPerSecond: number; compressionBudgetMs: number;
 }
+export interface NetworkEnhancements {
+  freshPositions: number; positionFallbacks: number; actorBonuses: number; vanillaPriorityPasses: number;
+  earlyBuffered: number; earlyReplayed: number; earlyFailures: number; earlyQueuedBytes: number;
+  forcedSharing: boolean; mapCapablePeers: number; mapSentBytes: number; mapReceivedBytes: number;
+  mapPackets: number; mapSkipped: number; mapRejected: number;
+}
 export interface ServerImprovements extends ImprovementSettings {
+  network?: NetworkEnhancements | null;
   steamConfigInterface: string | null; captainStatus: string;
   captainCandidates: number; captainTransfers: number; captainDeferred: number;
   compressionEncodeMs: Timing | null; compressionDecodeMs: Timing | null;
@@ -33,10 +40,18 @@ export function validImprovementSettings(s: unknown): s is ImprovementSettings {
 export function validImprovements(s: unknown, timing: (x: unknown) => boolean): s is ServerImprovements {
   return object(s) && validImprovementSettings(s) && (s.steamConfigInterface === null || text(s.steamConfigInterface)) && text(s.captainStatus)
     && ['captainCandidates', 'captainTransfers', 'captainDeferred', 'rawPayloadBytes', 'framedPayloadBytes', 'compressedSent', 'compressedReceived', 'compressionSkipped', 'compressionRejected'].every(k => num(s[k]))
+    && (s.network == null || validNetworkEnhancements(s.network))
     && Number(s.framedPayloadBytes) <= Number(s.rawPayloadBytes) && timing(s.compressionEncodeMs) && timing(s.compressionDecodeMs);
 }
 export function validPeerImprovements(p: unknown): p is PeerImprovements {
   return object(p) && within(p.windowBytes, 10240, 65536) && num(p.rateWriteFailures)
     && ['windowStatus', 'rateStatus', 'compressionStatus'].every(k => p[k] === null || text(p[k]))
     && ['originalMaxRateBytesPerSecond', 'effectiveMaxRateBytesPerSecond', 'minimumRateBytesPerSecond'].every(k => p[k] === null || num(p[k]));
+}
+
+export function validNetworkEnhancements(s: unknown): s is NetworkEnhancements {
+  return object(s) && typeof s.forcedSharing === 'boolean'
+    && ['freshPositions', 'positionFallbacks', 'actorBonuses', 'vanillaPriorityPasses', 'earlyBuffered', 'earlyReplayed', 'earlyFailures',
+      'earlyQueuedBytes', 'mapCapablePeers', 'mapSentBytes', 'mapReceivedBytes', 'mapPackets', 'mapSkipped', 'mapRejected'].every(k => Number.isSafeInteger(s[k]) && num(s[k]))
+    && Number(s.earlyQueuedBytes) <= 2097152 && Number(s.mapCapablePeers) <= 64;
 }
