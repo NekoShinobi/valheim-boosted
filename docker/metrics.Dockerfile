@@ -7,7 +7,7 @@ RUN bun run check && bun run build
 
 FROM oven/bun:1.4.0 AS runtime
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 TELEMETRY_PATH=/telemetry/snapshot.json REPORTS_DIRECTORY=/reports
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 TELEMETRY_PATH=/telemetry/snapshot.json REPORTS_DIRECTORY=/reports HISTORY_RETENTION_DAYS=7
 USER root
 RUN mkdir /reports && chown bun:bun /reports
 COPY --from=build --chown=bun:bun /app/dashboard/dist ./dashboard/dist

@@ -41,6 +41,9 @@ internal static class Program
         CompatibilityChecks.Run(Check);
         MeasurementChecks.Run(Check);
         SchedulerChecks.Run(Check);
+        ServerImprovementChecks.Run(Check);
+        IdleServerChecks.Run(Check);
+        ClientTransportChecks.Run(Check);
         string directory = Path.Combine(Path.GetTempPath(), "valheim-boosted-checks-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
@@ -59,6 +62,7 @@ internal static class Program
 
             string path = Path.Combine(directory, "snapshot.json");
             var initial = Snapshot(0);
+            initial.sampleIntervalSeconds = 5;
             initial.peers[0].measurementError = new MeasurementError { exceptionType = "DllNotFoundException", message = "missing library", operation = "Steamworks.Query", exceptionChain = "TargetInvocationException -> DllNotFoundException" };
             initial.compatibility = new CompatibilityInfo { gameVersion = "1.0.7", networkVersion = 39, status = "supported" };
             initial.features = new[] { new FeatureStatus { id = "NetworkTiming", enabled = true, status = "installed_waiting" } };
@@ -66,6 +70,7 @@ internal static class Program
             using (var json = JsonDocument.Parse(File.ReadAllText(path)))
             {
                 Check(json.RootElement.GetProperty("schemaVersion").GetInt32() == 1, "Schema version");
+                Check(json.RootElement.GetProperty("sampleIntervalSeconds").GetDouble() == 5, "Next sampling interval survives export for freshness checks");
                 Check(json.RootElement.GetProperty("peers")[0].GetProperty("measurementError").GetProperty("exceptionType").GetString() == "DllNotFoundException", "Underlying measurement error survives snapshot serialization");
                 Check(json.RootElement.GetProperty("peers")[0].GetProperty("rttMs").ValueKind == JsonValueKind.Null, "Unknown measurements serialize as null");
                 Check(json.RootElement.GetProperty("compatibility").GetProperty("networkVersion").GetUInt32() == 39, "Runtime protocol exported");

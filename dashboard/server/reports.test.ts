@@ -108,7 +108,7 @@ test('reports persist across repository restart, stay immutable after reset, and
     const brokenId = crypto.randomUUID(); await writeFile(join(directory, `${brokenId}.json`), '{}');
     expect((await reopened.list()).unreadable).toBe(1);
     expect((await reopened.list()).reports).toHaveLength(1);
-    await writeFile(join(directory, `${brokenId}.json`), 'x'.repeat(1024 * 1024 + 1));
+    await writeFile(join(directory, `${brokenId}.json`), 'x'.repeat(4 * 1024 * 1024 + 1));
     await expect(reopened.get(brokenId)).rejects.toThrow('size limit');
     expect((await readdir(directory)).filter(f => f.endsWith('.tmp'))).toHaveLength(0);
   } finally { await rm(directory, { recursive: true }); }

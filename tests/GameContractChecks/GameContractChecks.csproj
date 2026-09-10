@@ -6,6 +6,19 @@
     <NoWarn>0649</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../TelemetryChecks/ServerImprovementChecks.cs" Link="ServerImprovementChecks.cs" />
+    <Compile Include="../../mod/CaptainPolicy.cs" Link="CaptainPolicy.cs" />
+    <Compile Include="../../mod/LosslessZdoCodec.cs" Link="LosslessZdoCodec.cs" />
+    <Compile Include="../../mod/CompressionSession.cs" Link="CompressionSession.cs" />
+
+    <Compile Include="../../mod/CaptainContracts.cs" Link="CaptainContracts.cs" />
+    <Compile Include="../../mod/SteamRateAdapter.cs" Link="SteamRateAdapter.cs" />
+    <Compile Include="../../mod/SteamRateLease.cs" Link="SteamRateLease.cs" />
+    <Compile Include="../../mod/SendZdoTransform.cs" Link="SendZdoTransform.cs" />
+
+    <Compile Include="../../mod/ServerImprovementMetrics.cs" Link="ServerImprovementMetrics.cs" />
+    <Compile Include="../../mod/SendWindowPolicy.cs" Link="SendWindowPolicy.cs" />
+    <Compile Include="../../mod/ClientTelemetryModel.cs" Link="ClientTelemetryModel.cs" />
     <Compile Include="../../mod/ReplicationContracts.cs" Link="ReplicationContracts.cs" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     <Compile Include="../../mod/IntegrationState.cs" Link="IntegrationState.cs" />

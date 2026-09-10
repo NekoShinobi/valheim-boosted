@@ -1,6 +1,20 @@
 import type { Snapshot, Status } from './telemetry';
+import type { HistoryArchive } from './history';
+import type { ImprovementSettings } from './improvements';
 
 export const reportMetrics = [
+  { id: 'sendWindow', label: 'Peer ZDO allowance · mean', unit: 'KiB', mode: 'mean' },
+  { id: 'steamMaxRate', label: 'Peer Steam maximum rate · mean', unit: 'KiB/s', mode: 'mean' },
+  { id: 'steamRateFailures', label: 'Steam rate failures · largest connection total', unit: '', mode: 'max' },
+  { id: 'compressionEncode', label: 'Compression encode · mean', unit: 'ms', mode: 'mean' },
+  { id: 'compressionDecode', label: 'Compression decode · mean', unit: 'ms', mode: 'mean' },
+  { id: 'compressionSaved', label: 'Compressed ZDO bytes saved · all peers', unit: 'KiB/s', mode: 'rate' },
+  { id: 'compressedSent', label: 'Compressed ZDO frames sent', unit: '/s', mode: 'rate' },
+  { id: 'compressedReceived', label: 'Compressed ZDO frames received', unit: '/s', mode: 'rate' },
+  { id: 'compressionRejected', label: 'Compression messages rejected', unit: '/s', mode: 'rate' },
+  { id: 'compressionSkipped', label: 'Negotiated sends using vanilla', unit: '/s', mode: 'rate' },
+  { id: 'captainTransfers', label: 'Ship ownership transfers', unit: '/s', mode: 'rate' },
+  { id: 'captainDeferred', label: 'Ship transfers deferred by work limits', unit: '/s', mode: 'rate' },
   { id: 'peers', label: 'Connected peers', unit: '', mode: 'mean' },
   { id: 'loadedObjects', label: 'Loaded objects', unit: '', mode: 'mean' },
   { id: 'knownZdos', label: 'Known ZDOs', unit: '', mode: 'mean' },
@@ -39,6 +53,7 @@ export interface Aggregate {
   min: number; max: number; total: number; availableSeconds: number;
 }
 export interface ReportSource {
+  serverImprovements?: ImprovementSettings | null;
   processSession: string; worldSession: string | null; role: string;
   modVersion: string; modBuildId: string | null;
   compatibility: Snapshot['compatibility'];
@@ -52,6 +67,8 @@ export interface RecordingView {
   pausedReason: string | null;
 }
 export interface ReportDraft extends RecordingView {
+  timeline?: HistoryArchive | null;
+  timelineError?: string | null;
   name: string; source: ReportSource;
   metrics: Partial<Record<MetricId, Aggregate>>;
   telemetryStatus: Status;

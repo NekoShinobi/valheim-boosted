@@ -10,18 +10,34 @@ public static class Version { public static System.Version CurrentVersion => new
 public sealed class ZNet {
     public static ZNet instance;
     public bool Dedicated = true;
+    public readonly List<ZNetPeer> Peers = new List<ZNetPeer>();
+    public List<ZNetPeer> GetPeers() => Peers;
+    public ZNetPeer GetPeer(long uid) => Peers.Find(p => p.m_uid == uid);
     public bool IsDedicated() => Dedicated;
     public static implicit operator bool(ZNet value) => value != null;
 }
-public class TestSocket { public bool Connected = true; public bool IsConnected() => Connected; }
+public class TestSocket { public bool Connected = true; public bool IsConnected() => Connected; public void Close() => Connected = false; }
 public sealed class ZSteamSocket : TestSocket { }
-public sealed class ZNetPeer { public ZRpc m_rpc = new ZRpc(); public TestSocket m_socket = new ZSteamSocket(); public bool Ready = true; public bool IsReady() => Ready; }
-public sealed class ZRpc { }
-public sealed class ZPackage { }
+public sealed class ZNetPeer { public long m_uid = 1; public ZRpc m_rpc = new ZRpc(); public TestSocket m_socket = new ZSteamSocket(); public bool Ready = true; public bool IsReady() => Ready; }
+public sealed class ZRpc {
+    public readonly List<Tuple<string, object[]>> Sent = new List<Tuple<string, object[]>>();
+    public readonly Dictionary<string, Action<ZRpc, ZPackage>> Handlers = new Dictionary<string, Action<ZRpc, ZPackage>>();
+    public void Register<T>(string name, Action<ZRpc, T> handler) => Handlers[name] = (rpc,p) => handler(rpc,(T)(object)p);
+    public void Unregister(string name) => Handlers.Remove(name);
+    public void Invoke(string name, params object[] args) => Sent.Add(Tuple.Create(name,args));
+    public void Deliver(string name, byte[] bytes) => Handlers[name](this,new ZPackage(bytes));
+}
+public sealed class ZPackage {
+    private readonly byte[] bytes;
+    public ZPackage(byte[] bytes) { this.bytes = bytes; }
+    public int Size() => bytes.Length;
+    public byte[] GetArray() => bytes;
+}
 public sealed class ZDO { }
 public sealed class ZNetView { }
 public sealed class ZNetScene { private Dictionary<ZDO, ZNetView> m_instances; }
 public sealed class ZDOMan {
+    public static ZDOMan instance; public byte[] Received; public int ReceiveCalls;
     public float Total;
     public sealed class ZDOPeer { public ZNetPeer m_peer; }
     public readonly List<ZDOPeer> Peers = new List<ZDOPeer>();
@@ -33,7 +49,7 @@ public sealed class ZDOMan {
     [MethodImpl(MethodImplOptions.NoInlining)] public void SendZDOToPeers2(float dt) { VanillaCalls++; }
 
     [MethodImpl(MethodImplOptions.NoInlining)] public void Update(float delta) { if (delta < 0) throw new InvalidOperationException("original"); Total += delta; }
-    [MethodImpl(MethodImplOptions.NoInlining)] public void RPC_ZDOData(ZRpc rpc, ZPackage package) { }
+    [MethodImpl(MethodImplOptions.NoInlining)] private void RPC_ZDOData(ZRpc rpc, ZPackage package) { Received = package.GetArray(); ReceiveCalls++; }
 }
 namespace BepInEx.Configuration {
     public sealed class ConfigDescription { public ConfigDescription(string text, object range) { } }
@@ -43,13 +59,22 @@ namespace BepInEx.Configuration {
         public bool Enabled = true;
         public bool? Scheduling;
         public HashSet<string> Disabled = new HashSet<string>();
-        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = typeof(T) == typeof(bool) ? (T)(object)(section == "Scheduling" ? (Scheduling ?? (bool)(object)value) : Enabled && !Disabled.Contains(key)) : value };
+        public ConfigEntry<T> Bind<T>(string section, string key, T value, string description) => new ConfigEntry<T> { Value = typeof(T) == typeof(bool) ? (T)(object)(section == "Scheduling" ? (Scheduling ?? (bool)(object)value) : section == "Features" ? Enabled && !Disabled.Contains(key) : (bool)(object)value) : value };
         public ConfigEntry<T> Bind<T>(string section, string key, T value, ConfigDescription description) => new ConfigEntry<T> { Value = value };
     }
 }
 namespace ValheimBoosted {
     public static class Plugin { public const string PluginVersion = "test"; public const string PluginGuid = "valheim.boosted.integration-tests"; }
-    internal static class SteamMetrics { internal static string Initialize() => "fixture"; }
+    internal static class SteamMetrics {
+        internal static string Initialize() => "fixture";
+        internal static void ReadManagedQueue(ZSteamSocket socket, PeerMetrics sample) => sample.applicationQueuedBytes = 0;
+        internal static void Read(ZSteamSocket socket, PeerMetrics sample) { sample.measurementStatus = "available"; sample.rttMs = 200; sample.estimatedTransportQueueMs = 0; sample.pendingReliableBytes = 0; sample.estimatedSendRateBytesPerSecond = 153600; }
+    }
+    internal sealed class SteamRateAdapter {
+        internal string Backend => "fixture";
+        internal SteamRateSetting Read(ZSteamSocket socket, bool max) => new SteamRateSetting { Value = 153600, Inherited = true };
+        internal void WriteMaximum(ZSteamSocket socket, int? value) { }
+    }
     internal static class TelemetryHooks {
         internal static TelemetryIntegration Integration;
         internal static void BeginNetworkUpdate() { }
@@ -118,6 +143,7 @@ internal static class Program {
             Check(!Harmony.GetPatchInfo(method).Owners.Contains(Plugin.PluginGuid), "Failed probe hooks removed at next audit");
         }
         SchedulerIntegrationChecks.Run(Check);
+        CompressionIntegrationChecks.Run(Check);
         Console.WriteLine($"PASS: {checks} Harmony integration checks."); return 0;
     }
 }

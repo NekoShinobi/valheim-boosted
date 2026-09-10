@@ -38,7 +38,7 @@
     <button class="primary" type="submit" disabled={busy || !recording?.snapshots || !name.trim()}>Save report</button>
     <button class="outline" type="button" disabled={busy} onclick={() => void action(true)}>Reset stats</button>
   </form>
-  <p class="muted runtime-note">Reset clears unsaved report stats and chart history for everyone using this dashboard. Live game counters and saved reports remain unchanged.</p>
+  <p class="muted runtime-note">Reset starts a new recording and clears the overview charts for everyone using this dashboard. Persistent history and saved reports are retained.</p>
   {#if recording?.pausedReason}<p class="notice report-message">{recording.pausedReason}</p>{/if}
   {#if message}<div class:report-error={failed} class="report-message" role="status">{message}{#if saved} <a href={`/api/reports/${saved.id}/download`}>Download JSON</a> · <a href={`/reports?baseline=${saved.id}`}>View report</a>{/if}</div>{/if}
 </section>

@@ -1,6 +1,6 @@
 # valheim-boosted observability — first pass
 
-valheim-boosted 0.1.0 collects diagnostics and enables the [Stage 2 scheduler](SCHEDULING.md) by default for dedicated Steam servers. The scheduler changes normal send scheduling, while preserving ownership, vanilla packet formats, queue allowances and native rate settings. There are no telemetry RPCs. The separate Svelte/Bun dashboard reads these snapshots; see [dashboard/README.md](../dashboard/README.md).
+valheim-boosted 0.1.0 collects diagnostics and enables the [Stage 2 scheduler](SCHEDULING.md) by default for dedicated Steam servers. Stage 2 alone changes normal send scheduling while preserving ownership, vanilla packet formats, queue allowances and native rate settings. [Stages 3–5](SERVER-IMPROVEMENTS.md) are separately opt-in experiments. Optional peer telemetry RPCs carry bounded client performance summaries to compatible servers. The separate Svelte/Bun dashboard reads these snapshots and retains history; see [dashboard/README.md](../dashboard/README.md).
 
 ## Client HUD
 
@@ -86,7 +86,7 @@ Each peer exports optional `measurementError` fields (`exceptionType`, `message`
 
 Timing summaries contain count, mean, p95, and max. Percentiles use at most the latest 2048 measurements per window; `percentileSamples` makes truncation explicit. Mean/max/count cover the full window. Empty timing windows use null values. The first frame interval includes time since collector initialization. Steam native status failure leaves metrics null. Other transports are marked unsupported instead of reporting fabricated zeros. This release targets Steam transport.
 
-Peer IDs are opaque game-session identifiers, not Steam IDs. Player names, IP addresses, passwords, world names, and packet contents are not exported. No counter-reset APIs are called. Optional hooks/field reads report unavailable status if installation fails. Other mods changing these internals still require compatibility testing.
+Peer IDs are opaque game-session identifiers, not Steam IDs. Core peer metrics omit IP addresses, passwords, world names and packet contents. Optional client telemetry adds server-known character labels (`IncludePlayerNames`, default true), fresh connection stream IDs and server-scoped Steam account pseudonyms for returning-player history. The private identity key and raw Steam IDs are never exported. See [player identity and sessions](HISTORY.md#returning-players-and-login-sessions). No counter-reset APIs are called. Optional hooks/field reads report unavailable status if installation fails. Other mods changing these internals still require compatibility testing.
 
 ## Verification and live checklist
 
@@ -108,4 +108,12 @@ Live checks still required:
 4. Leave the world and quit; inspect menu/stopped status. Kill a development process separately to verify the dashboard detects stale output.
 5. Validate the plugin and Steam calls on the matching dedicated-server build/container, with a writable export directory. Confirm no UI activity there.
 
-Remote client CPU telemetry, ownership-transfer history, object-specific freshness, whole-server CPU/RSS, automatic mod-launched dashboard startup, and adaptive tuning are later work. None is implied by the current metrics.
+Remote client frame/CPU telemetry and seven-day history are described in [HISTORY.md](HISTORY.md). Ownership-transfer history, object-specific freshness, whole-machine CPU/RSS, automatic mod-launched dashboard startup, and adaptive tuning remain later work.
+
+## Stages 3–5 measurements
+
+`serverImprovements` exports configured send-window/rate ceilings, compression budget, Steam config interface, captain eligibility/status and per-window transfers/deferrals, compression raw/framed bytes, sent/received/skipped/rejected counts and encode/decode timing summaries. Savings compare the original bytes with the full compression envelope, before Steam framing; they cover only compressed sends. CPU timing has null percentiles when no operation ran.
+
+`peers[].improvements` exports the applied ZDO allowance/reason, original and effective maximum rate, unchanged minimum rate, cumulative connection write/readback/restore failures, and compression negotiation/drain status. A configuration flag alone does not prove application. Closed connections have no further samples. These fields are optional for compatibility with older snapshots.
+
+The overview, report comparisons and persistent LayerChart history expose these fields. See [Server improvements](SERVER-IMPROVEMENTS.md) for exact units, bounds, fallback and live acceptance scenarios.

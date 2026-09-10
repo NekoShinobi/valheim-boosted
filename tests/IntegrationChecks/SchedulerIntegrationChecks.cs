@@ -7,7 +7,7 @@ using ValheimBoosted;
 namespace ValheimBoosted
 {
     // Fixtures replace only game contracts/clock; actual scheduler integration and Harmony execute.
-    internal static class TelemetryCollector { internal static double Now; }
+    internal static class TelemetryCollector { private static double now; internal static double ClockStep; internal static double Now { get { double v = now; now += ClockStep; return v; } set => now = value; } }
     internal sealed class ReplicationContracts
     {
         internal readonly MethodInfo Schedule = typeof(ZDOMan).GetMethod("SendZDOToPeers2"), Send = typeof(ZDOMan).GetMethod("SendZDOs");

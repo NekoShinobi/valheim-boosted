@@ -1,6 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net48</TargetFramework><LangVersion>latest</LangVersion><NoWarn>0649;0169</NoWarn><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
-<ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../mod/AdvancedReplication.cs" Link="AdvancedReplication.cs" />
+    <Compile Include="../../mod/ZdoCompression.cs" Link="ZdoCompression.cs" />
+    <Compile Include="../../mod/CompressionSession.cs" Link="CompressionSession.cs" />
+    <Compile Include="../../mod/LosslessZdoCodec.cs" Link="LosslessZdoCodec.cs" />
+    <Compile Include="../../mod/SteamRateLease.cs" Link="SteamRateLease.cs" />
+    <Compile Include="../../mod/SendZdoTransform.cs" Link="SendZdoTransform.cs" />
+
+    <Compile Include="../../mod/ServerImprovementMetrics.cs" Link="ServerImprovementMetrics.cs" />
+    <Compile Include="../../mod/SendWindowPolicy.cs" Link="SendWindowPolicy.cs" />
+<Compile Include="../../mod/ClientTelemetryModel.cs" Link="ClientTelemetryModel.cs" />
 <Compile Include="../../mod/ReplicationIntegration.cs" Link="ReplicationIntegration.cs" />
 <Compile Include="../../mod/FairScheduler.cs" Link="FairScheduler.cs" />
 <Compile Include="../../mod/TelemetryModel.cs" Link="TelemetryModel.cs" />

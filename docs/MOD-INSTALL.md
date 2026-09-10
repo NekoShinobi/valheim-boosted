@@ -71,4 +71,4 @@ ExportPath = /config/valheim-boosted/telemetry/snapshot.json
 
 Existing configs keep their saved `ExportPath`; edit it and restart to adopt this default. For a non-container installation, set a writable absolute path and point the dashboard at the same file. In community-valheim-tools/valheim-server-docker, the mod config is `/config/bepinex/valheim.boosted.cfg`.
 
-By default the mod collects metrics and enables Stage 2 fair replication scheduling for dedicated Steam servers; see [scheduler configuration](SCHEDULING.md). It does not change ownership or send client CPU reports. The dashboard is a separate application/image.
+By default the mod collects metrics and enables Stage 2 fair replication scheduling for dedicated Steam servers; see [scheduler configuration](SCHEDULING.md). Installed clients also share bounded performance summaries, including frame intervals, CPU and GC, with compatible servers. See [client telemetry and history](HISTORY.md) for sharing switches, F9 lag markers and seven-day retention. The dashboard is a separate application/image.

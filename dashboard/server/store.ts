@@ -11,7 +11,8 @@ export class TelemetryStore {
   private busy = false;
   private recording = new Recording();
 
-  constructor(private readonly path: string, private readonly historyLimit = 300, private readonly staleMs = 5000) {}
+  constructor(private readonly path: string, private readonly historyLimit = 300, private readonly staleMs = 5000,
+    private readonly onSnapshot?: (snapshot: Snapshot, now: number) => void) {}
 
   accept(raw: unknown, now = Date.now()) {
     const next = parseSnapshot(raw);
@@ -25,6 +26,8 @@ export class TelemetryStore {
     this.snapshot = next;
     this.acceptedAt = now;
     this.recording.accept(next, this.view(now).status === 'live');
+    const status = this.view(now).status;
+    if (status === 'live' || status === 'stopped' && Math.abs(now-Date.parse(next.capturedAtUtc)) <= Math.max(this.staleMs,next.sampleWindowSeconds*3000,(next.sampleIntervalSeconds ?? 0)*3000)) this.onSnapshot?.(next, now);
     if (next.running && next.role !== 'menu') {
       this.history.push({
         at: Date.parse(next.capturedAtUtc), frameP95: next.frameIntervalMs?.p95 ?? null,
@@ -74,7 +77,7 @@ export class TelemetryStore {
     let status: MetricsResponse['status'] = 'waiting';
     let message = 'Waiting for the mod to export its first snapshot.';
     if (snapshot) {
-      const ageLimit = Math.max(this.staleMs, snapshot.sampleWindowSeconds * 3000);
+      const ageLimit = Math.max(this.staleMs, snapshot.sampleWindowSeconds * 3000, (snapshot.sampleIntervalSeconds ?? 0) * 3000);
       const stale = now - this.acceptedAt > ageLimit || now - Date.parse(snapshot.capturedAtUtc) > ageLimit || Date.parse(snapshot.capturedAtUtc) - now > 60000;
       status = !snapshot.running || snapshot.role === 'menu' || snapshot.role === 'stopped' ? 'stopped' : this.error || stale ? 'stale' : 'live';
       message = status === 'live' ? 'Receiving telemetry from the mod.' : status === 'stopped' ? 'The game session has stopped.' : 'Showing the last snapshot; telemetry is no longer current.';

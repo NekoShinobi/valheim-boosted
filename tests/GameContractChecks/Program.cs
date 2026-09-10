@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Linq;
 using ValheimBoosted;
 
 namespace ValheimBoosted { public static class Plugin { public const string PluginVersion = "contract-check"; } }
@@ -42,9 +43,29 @@ internal static class Program
                 throw new Exception("Unreviewed target: " + entry.Name);
         }
         var replication = new ReplicationContracts();
+        int checks = 0;
+        ServerImprovementChecks.Run((ok, message) => { if (!ok) throw new Exception(message); checks++; });
+        System.Console.WriteLine("PASS: " + checks + " server improvement checks under Mono");
+        new CaptainContracts().Audit();
+        var adapter = new SteamRateAdapter();
+        TransformChecks.Run(replication.Send);
+        System.Console.WriteLine("PASS: captain contracts, Steam connection config interface " + adapter.Backend + ", real Harmony send transforms");
         System.Console.WriteLine("PASS: scheduler/send fingerprint pair, signatures and peer fields");
         // Initialize inspects managed contracts; it never calls Steam or starts Unity.
-        System.Console.WriteLine($"PASS: game {game}, protocol {protocol}, transport {SteamMetrics.Initialize()}");
+        string transport = SteamMetrics.Initialize();
+        var send = typeof(ZSteamSocket).GetMethod("SendQueuedPackages", flags);
+        var sendInterface = CompatibilityPolicy.Calls(send).OfType<MethodInfo>()
+            .Single(m => m.Name == "SendMessageToConnection").DeclaringType;
+        if (transport != sendInterface.FullName)
+            throw new Exception("Steam telemetry must query the same interface that sends game traffic");
+        // Dedicated references reproduce the bug: quality uses the client API while
+        // actual game traffic uses the server API. Inspect without initializing Steam.
+        string expectedGuard = transport == "Steamworks.SteamGameServerNetworkingSockets"
+            ? "TestIfAvailableGameServer" : "TestIfAvailableClient";
+        var query = sendInterface.GetMethod("GetConnectionRealTimeStatus");
+        if (!CompatibilityPolicy.Calls(query).Any(m => m.Name == expectedGuard))
+            throw new Exception("Steam query uses an unexpected initialization context");
+        System.Console.WriteLine($"PASS: game {game}, protocol {protocol}, transport {transport}, guard {expectedGuard}");
         return 0;
     }
 }

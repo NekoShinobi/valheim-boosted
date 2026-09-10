@@ -1,4 +1,5 @@
 import type { Peer, Snapshot, Status, Timing } from '../shared/telemetry';
+import { improvementSettings } from '../shared/improvements';
 import type { Aggregate, MetricId, RecordingView, ReportDraft, ReportSource } from '../shared/reports';
 
 function source(snapshot: Snapshot): ReportSource {
@@ -7,6 +8,7 @@ function source(snapshot: Snapshot): ReportSource {
     processSession: snapshot.processSession, worldSession: snapshot.worldSession, role: snapshot.role,
     modVersion: snapshot.modVersion, modBuildId: snapshot.modBuildId ?? null,
     compatibility: snapshot.compatibility ?? null,
+    serverImprovements: improvementSettings(snapshot.serverImprovements),
     scheduler: s ? { enabled: s.enabled, targetHz: s.targetHz, budgetMs: s.budgetMs, maxCallsPerFrame: s.maxCallsPerFrame, debtCap: s.debtCap } : null,
     features: (snapshot.features ?? []).map(f => ({ id: f.id, enabled: f.enabled })).sort((a, b) => a.id.localeCompare(b.id)),
   };
@@ -32,7 +34,7 @@ export class Recording {
       this.state.pausedReason = 'Session or settings changed. Save this window, then reset stats to record the current session.';
       return;
     }
-    const end = Date.parse(snapshot.capturedAtUtc);
+    const end = snapshot.clockUtcMs ?? Date.parse(snapshot.capturedAtUtc);
     const start = end - snapshot.sampleWindowSeconds * 1000;
     // Skip stale files and partial windows straddling a reset. Never count the same sequence twice.
     if (!fresh || !snapshot.running || ['menu', 'stopped'].includes(snapshot.role) || snapshot.sampleWindowSeconds <= 0
@@ -42,7 +44,7 @@ export class Recording {
       this.state.startedAtUtc = new Date(start).toISOString();
     } else this.state.missedSnapshots += snapshot.sequence - this.lastSequence - 1;
     this.lastSequence = snapshot.sequence;
-    this.state.endedAtUtc = snapshot.capturedAtUtc;
+    this.state.endedAtUtc = new Date(end).toISOString();
     this.state.snapshots++;
     this.state.observedSeconds += snapshot.sampleWindowSeconds;
     this.state.elapsedSeconds = (end - Date.parse(this.state.startedAtUtc!)) / 1000;
@@ -82,6 +84,17 @@ export class Recording {
     timing('schedulerWork', snapshot.scheduler?.frameWorkMs);
     add('timeLimited', snapshot.scheduler?.timeLimitedFrames); add('workLimited', snapshot.scheduler?.workLimitedFrames);
     add('discardedDebt', snapshot.scheduler?.discardedDebt);
+    perPeer('sendWindow', p => p.improvements?.windowBytes, 1 / 1024);
+    perPeer('steamMaxRate', p => p.improvements?.effectiveMaxRateBytesPerSecond, 1 / 1024);
+    perPeer('steamRateFailures', p => p.improvements?.rateWriteFailures);
+    const improved = snapshot.serverImprovements;
+    if (improved) {
+      timing('compressionEncode', improved.compressionEncodeMs); timing('compressionDecode', improved.compressionDecodeMs);
+      add('compressionSaved', (improved.rawPayloadBytes - improved.framedPayloadBytes) / 1024);
+      add('compressedSent', improved.compressedSent); add('compressedReceived', improved.compressedReceived);
+      add('compressionRejected', improved.compressionRejected); add('compressionSkipped', improved.compressionSkipped);
+      add('captainTransfers', improved.captainTransfers); add('captainDeferred', improved.captainDeferred);
+    }
   }
 
   view(): RecordingView { return { ...this.state }; }

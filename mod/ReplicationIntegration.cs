@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using BepInEx.Configuration;
 using HarmonyLib;
 
@@ -20,6 +21,7 @@ internal sealed class ReplicationIntegration : IDisposable
     private readonly int maxCalls, debtCap;
     private readonly double budgetMs;
     private ReplicationContracts contracts;
+    internal readonly AdvancedReplication Advanced;
     private ZDOMan manager;
     private int calls, timeLimited, workLimited;
     private double discarded;
@@ -50,8 +52,10 @@ internal sealed class ReplicationIntegration : IDisposable
         scheduler = new FeatureStatus { id = "FairScheduler", enabled = enabled, target = "ZDOMan.SendZDOToPeers2", status = !enabled ? "configured_disabled" : !integration.GameSupported ? "blocked_compatibility" : "available" };
         observer = new FeatureStatus { id = "Replication", enabled = observe, target = "ZDOMan.SendZDOs", status = !observe ? "configured_disabled" : !integration.GameSupported ? "blocked_compatibility" : "available" };
         integration.Features[scheduler.id] = scheduler; integration.Features[observer.id] = observer;
+        Advanced = new AdvancedReplication(config, integration, log);
+        Advanced.Initialize();
         Current = this;
-        if (!scheduler.Collect && !observer.Collect) return;
+        if (!scheduler.Collect && !observer.Collect && !Advanced.NeedsPatch) return;
         try
         {
             contracts = new ReplicationContracts();
@@ -66,6 +70,11 @@ internal sealed class ReplicationIntegration : IDisposable
                 harmony.Patch(contracts.Schedule, prefix: Hook(nameof(Schedule)));
                 scheduler.status = "installed_waiting";
                 scheduler.detail = "Awaiting a dedicated Steam server; experimental, 20 Hz target";
+            }
+            if (Advanced.NeedsPatch)
+            {
+                harmony.Patch(contracts.Send, transpiler: Hook(nameof(TransformSend)));
+                Advanced.MarkPatched();
             }
             if (!Registered()) throw new InvalidOperationException("Replication patch registration mismatch");
         }
@@ -86,12 +95,13 @@ internal sealed class ReplicationIntegration : IDisposable
         return info == null ? 0 : info.Prefixes.Concat(info.Postfixes).Concat(info.Finalizers).Concat(info.Transpilers).Count(p => p.owner == harmony.Id);
     }
     private bool Registered() => OwnCount(contracts.Schedule) == (scheduler.Collect ? 1 : 0)
-        && OwnCount(contracts.Send) == (observer.Collect ? 2 : 0)
+        && OwnCount(contracts.Send) == (observer.Collect ? 2 : 0) + (Advanced.Patched ? 1 : 0)
         && (!scheduler.Collect || Has(contracts.Schedule, nameof(Schedule), false))
-        && (!observer.Collect || (Has(contracts.Send, nameof(BeforeSend), false) && Has(contracts.Send, nameof(AfterSend), true)));
+        && (!observer.Collect || (Has(contracts.Send, nameof(BeforeSend), false) && Has(contracts.Send, nameof(AfterSend), true)))
+        && (!Advanced.Patched || Harmony.GetPatchInfo(contracts.Send)?.Transpilers.Count(p => p.owner == harmony.Id && p.PatchMethod == AccessTools.Method(typeof(ReplicationIntegration), nameof(TransformSend))) == 1);
     internal void Audit(double now)
     {
-        if (contracts == null || (!scheduler.Collect && !observer.Collect) || now < nextAudit) return;
+        if (contracts == null || (!scheduler.Collect && !observer.Collect && !Advanced.Patched) || now < nextAudit) return;
         nextAudit = now + 1;
         if (Foreign(contracts.Schedule) || Foreign(contracts.Send) || !Registered()) Disable("patch_changed", new InvalidOperationException("ZDO patch registration changed or another owner appeared"));
     }
@@ -99,6 +109,7 @@ internal sealed class ReplicationIntegration : IDisposable
     {
         foreach (var feature in new[] { scheduler, observer }) if (feature.Collect) { feature.status = status; feature.detail = ex.GetBaseException().Message; }
         policy.Clear();
+        Advanced.Disable(ex.GetBaseException().Message);
         harmony.UnpatchSelf();
         log("Replication fallback to vanilla: " + ex);
     }
@@ -109,6 +120,11 @@ internal sealed class ReplicationIntegration : IDisposable
         calls = timeLimited = workLimited = 0; discarded = 0;
     }
     internal void RefreshWorld(ZDOMan value) => Reset(value);
+    // Both transformations share the scheduler's Harmony owner and its exact SendZDOs contract.
+    internal static IEnumerable<CodeInstruction> TransformSend(IEnumerable<CodeInstruction> instructions) => SendZdoTransform.Apply(instructions,
+        AccessTools.Method(typeof(ReplicationIntegration), nameof(SendWindow)), AccessTools.Method(typeof(ReplicationIntegration), nameof(DispatchZdo)));
+    private static int SendWindow(object peer, bool flush) => Current?.Advanced.Window((ZNetPeer)Current.contracts.Peer.GetValue(peer), flush) ?? SendWindowPolicy.VanillaBytes;
+    private static void DispatchZdo(ZRpc rpc, string method, object[] args) { if (Current == null) rpc.Invoke(method, args); else Current.Advanced.Invoke(rpc, method, args); }
     private static bool Schedule(ZDOMan __instance, float __0) => Current?.Run(__instance, __0) ?? true;
     private bool Run(ZDOMan value, float dt)
     {
@@ -216,5 +232,5 @@ internal sealed class ReplicationIntegration : IDisposable
         calls = timeLimited = workLimited = 0; discarded = 0;
         return value;
     }
-    public void Dispose() { harmony.UnpatchSelf(); policy.Clear(); peers.Clear(); if (ReferenceEquals(Current, this)) Current = null; }
+    public void Dispose() { Advanced.Dispose(); harmony.UnpatchSelf(); policy.Clear(); peers.Clear(); if (ReferenceEquals(Current, this)) Current = null; }
 }

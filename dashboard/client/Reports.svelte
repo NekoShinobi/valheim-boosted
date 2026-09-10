@@ -77,6 +77,7 @@
     <div><strong>valheim-boosted</strong><p class="muted">World observability</p></div>
     <a href="/">◈ <span>Overview</span></a>
     <a class="nav-active" href="/reports">▤ <span>Reports</span></a>
+    <a href="/history">◷ <span>History</span></a>
     <div class="sidebar-footer"><span class="eyebrow">BEFORE &amp; AFTER</span><p>Match the world, player activity and recording length. Change one setting at a time.</p></div>
   </aside>
   <main>
@@ -99,6 +100,7 @@
           <section class="panel report-context">
             <div class="panel-heading"><div><p class="eyebrow">{slot.title}</p><h2>{r.name}</h2></div><a class="outline" href={`/api/reports/${r.id}/download`}>JSON ↓</a></div>
             <dl>
+              {#if r.timeline}<dt>Saved history</dt><dd><a class="outline" href={`/history?report=${r.id}`}>Open timeline ↗</a></dd>{:else if r.timelineError}<dt>Saved history</dt><dd>{r.timelineError}</dd>{/if}
               <dt>Recorded</dt><dd>{date(r.startedAtUtc)} → {date(r.endedAtUtc)}</dd>
               <dt>Coverage</dt><dd>{number(r.observedSeconds)} observed / {number(r.elapsedSeconds)} elapsed seconds · {r.snapshots} snapshots · {r.missedSnapshots} missed</dd>
               <dt>Peer count</dt><dd>{number(r.metrics.peers?.mean)} mean · {number(r.metrics.peers?.min)}–{number(r.metrics.peers?.max)} range</dd>
@@ -108,6 +110,12 @@
               <dt>Game module</dt><dd>{r.source.compatibility?.gameModuleId ?? 'Unknown'}</dd>
               <dt>World session</dt><dd>{r.source.worldSession ?? 'Unknown'}</dd>
               <dt>Scheduler</dt><dd>{scheduler(r)} · active in {r.schedulerActiveSnapshots}/{r.snapshots} windows</dd>
+              {#if r.source.serverImprovements}{@const s = r.source.serverImprovements}
+                <dt>Send windows</dt><dd>{s.windowsEnabled ? 'On' : 'Off'} · {number(s.maximumWindowBytes / 1024)} KiB maximum · {number(s.targetBytesPerSecond / 1024)} KiB/s target ceiling</dd>
+                <dt>Steam maximum rate</dt><dd>{s.rateEnabled ? 'On' : 'Off'} · {number(s.requestedMaxRateBytesPerSecond / 1024)} KiB/s requested</dd>
+                <dt>Captain ownership</dt><dd>{s.captainEnabled ? 'On' : 'Off'}</dd>
+                <dt>Compression</dt><dd>{s.compressionEnabled ? 'On' : 'Off'} · {s.compressionBudgetMs} ms/frame soft encode budget</dd>
+              {/if}
               <dt>Feature switches</dt><dd>{r.source.features.map(f => `${f.id}: ${f.enabled ? 'on' : 'off'}`).join(' · ') || 'Not reported'}</dd>
               <dt>At save</dt><dd>{r.telemetryStatus}{r.pausedReason ? ' · recording paused at session/settings change' : ''}</dd>
             </dl>

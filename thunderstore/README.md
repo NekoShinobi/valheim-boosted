@@ -65,6 +65,12 @@ Steam query failures include the underlying exception and operation in the snaps
 
 The Stage 2 fair scheduler is enabled by default for dedicated Steam servers in new configurations. Existing configs retain their saved setting; set `[Scheduling] Enabled = false` and restart to use vanilla scheduling; defaults are `MaxCallsPerFrame = 4`, `TimeBudgetMs = 2`, and `MaxDebtPerPeer = 2`. It targets 20 Hz opportunities while preserving vanilla packets and queue limits. A single send can exceed the soft time budget. Multiplayer acceptance testing remains pending. [Scheduler details](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SCHEDULING.md).
 
-Additional default-on probes are `Replication`, `ConnectionHealth`, and `ProcessResources`. They expose send attempts, service age, heartbeat age, managed queue growth, process CPU/RSS, frame tails and save timings. No ownership changes, native rate tuning or client CPU reporting are implemented.
+Additional default-on probes are `Replication`, `ConnectionHealth`, and `ProcessResources`. They expose send attempts, service age, heartbeat age, managed queue growth, process CPU/RSS, frame tails and save timings. Opt-in Stages 3–5 add per-peer ZDO allowances, connection maximum-rate tuning, ship captain ownership and negotiated lossless compression. All four new switches default off and require a restart. Stages 3–4 apply on dedicated Steam servers; compression needs both endpoints enabled and agreed. The dashboard shows their settings, savings/cost and history. [Configuration and limits](https://github.com/NekoShinobi/valheim-boosted/blob/main/docs/SERVER-IMPROVEMENTS.md). General NPC ownership rebalancing remains future work.
+
+## Player telemetry and history
+
+With the mod installed on both server and clients, performance summaries are shared by default using bounded game RPCs. The dashboard's **History** page aligns client FPS/frame intervals, CPU/GC, lag markers and both sides' connection measurements with server timing. Default history retention is seven days, configurable on the metrics server. **F9** marks an incident when the client processes the key.
+
+Set `[ClientTelemetry] ShareWithServer = false` on a client to stop sharing, or `ReceiveFromClients = false` on a server to decline reports. The server can set `IncludePlayerNames = false` to use opaque session labels. These settings require a restart. Unmodded clients remain compatible. Sharing is independent of local JSON export and needs no additional client-facing port.
 
 Upgrading from the earlier local UrfMode prototype? Remove its DLL before installing. To retain settings, copy `local.urfmode.cfg` to `valheim.boosted.cfg` if the new config does not exist, and update any old export path.

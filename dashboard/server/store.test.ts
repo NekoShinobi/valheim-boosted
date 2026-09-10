@@ -62,6 +62,20 @@ test('old file is immediately stale on dashboard startup', () => {
   expect(store.view(20000).status).toBe('stale');
 });
 
+test('idle cadence stays live across the transition but a frozen exporter still becomes stale', () => {
+  const store = new TelemetryStore('unused');
+  const idle = { ...snapshot(1, 10000), sampleWindowSeconds: 1, sampleIntervalSeconds: 5,
+    features: [{ id: 'IdleServer', enabled: true, status: 'active', detail: 'Empty server', target: 'Application.targetFrameRate', invocations: 0 }] };
+  store.accept(idle, 10000);
+  expect(store.view(16000).status).toBe('live');
+  expect(store.view(25001).status).toBe('stale');
+  store.accept({ ...snapshot(2, 26000), sampleIntervalSeconds: 1 }, 26000);
+  expect(store.view(32000).status).toBe('stale');
+  for (const bad of [-1, 0, 11, Infinity, '5'])
+    expect(() => parseSnapshot({ ...idle, sampleIntervalSeconds: bad })).toThrow('Invalid sample interval');
+  expect(parseSnapshot(snapshot()).sampleIntervalSeconds).toBeUndefined();
+});
+
 test('bounded history resets on world changes and rejects sequence regression', () => {
   const store = new TelemetryStore('unused', 2);
   for (let i = 1; i <= 5; i++) store.accept(snapshot(i, i * 1000), i * 1000);

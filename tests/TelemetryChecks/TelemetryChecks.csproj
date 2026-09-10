@@ -6,6 +6,18 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../mod/SteamRateLease.cs" Link="SteamRateLease.cs" />
+    <Compile Include="../../mod/ServerImprovementMetrics.cs" Link="ServerImprovementMetrics.cs" />
+    <Compile Include="../../mod/SendWindowPolicy.cs" Link="SendWindowPolicy.cs" />
+    <Compile Include="../../mod/CaptainPolicy.cs" Link="CaptainPolicy.cs" />
+    <Compile Include="../../mod/LosslessZdoCodec.cs" Link="LosslessZdoCodec.cs" />
+    <Compile Include="../../mod/CompressionSession.cs" Link="CompressionSession.cs" />
+    <Compile Include="../../mod/IdleServerPolicy.cs" Link="IdleServerPolicy.cs" />
+    <Compile Include="../../mod/IdleServerIntegration.cs" Link="IdleServerIntegration.cs" />
+    <Compile Include="../../mod/ClientTelemetryModel.cs" Link="ClientTelemetryModel.cs" />
+    <Compile Include="../../mod/PlayerIdentity.cs" Link="PlayerIdentity.cs" />
+    <Compile Include="../../mod/ClientTelemetryCodec.cs" Link="ClientTelemetryCodec.cs" />
+    <Compile Include="../../mod/ClientTelemetryTransport.cs" Link="ClientTelemetryTransport.cs" />
     <Compile Include="../../mod/FairScheduler.cs" Link="FairScheduler.cs" />
     <Compile Include="../../mod/ResourceSampler.cs" Link="ResourceSampler.cs" />
     <Compile Include="../../mod/IntegrationState.cs" Link="IntegrationState.cs" />

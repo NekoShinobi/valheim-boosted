@@ -5,6 +5,12 @@ namespace ValheimBoosted;
 // Plain managed snapshots: never pass Unity objects to the export thread.
 public sealed class TelemetrySnapshot
 {
+    public ServerImprovementMetrics serverImprovements;
+    public double? clockUtcMs;
+    public ClientTelemetrySnapshot clientTelemetry;
+    public double windowEndMonotonicMs;
+    public double? worstFrameEndMonotonicMs;
+    public int? longFrames250Ms;
     public int schemaVersion = 1;
     public string modVersion = Plugin.PluginVersion;
     public string modBuildId = typeof(TelemetrySnapshot).Module.ModuleVersionId.ToString();
@@ -23,6 +29,7 @@ public sealed class TelemetrySnapshot
     public string capturedAtUtc;
     public double uptimeSeconds;
     public double sampleWindowSeconds;
+    public double? sampleIntervalSeconds;
     public string role;
     public bool running = true;
     public TimingSummary frameIntervalMs;
@@ -64,6 +71,7 @@ public sealed class OwnerCount
 
 public sealed class PeerMetrics
 {
+    public PeerImprovementMetrics improvements;
     public string peerSessionId;
     public string transport;
     public bool connected;

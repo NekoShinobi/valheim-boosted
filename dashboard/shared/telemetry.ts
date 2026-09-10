@@ -1,6 +1,9 @@
 import type { RecordingView } from './reports';
+import { validImprovements, validPeerImprovements, type PeerImprovements, type ServerImprovements } from './improvements';
+import { validClientTelemetry, type ClientTelemetry } from './client-telemetry';
 
 export interface Peer {
+  improvements?: PeerImprovements | null;
   peerSessionId: string;
   transport: string;
   connected: boolean;
@@ -54,6 +57,14 @@ export interface Resources {
   threads: number | null; processorCount: number;
 }
 export interface Snapshot {
+  serverImprovements?: ServerImprovements | null;
+  clientTelemetry?: ClientTelemetry | null;
+  clockUtcMs?: number | null;
+  windowEndMonotonicMs?: number;
+  worstFrameEndMonotonicMs?: number | null;
+  longFrames250Ms?: number | null;
+  gcCollections?: number[];
+  clientChangedZdos?: number | null;
   modBuildId?: string | null;
   scheduler?: Scheduler | null;
   resources?: Resources | null;
@@ -71,6 +82,7 @@ export interface Snapshot {
   sequence: number;
   capturedAtUtc: string;
   sampleWindowSeconds: number;
+  sampleIntervalSeconds?: number | null;
   role: string;
   running: boolean;
   frameIntervalMs: Timing | null;
@@ -109,6 +121,11 @@ const peerNumbers = ['rttMs', 'rttSampleDeltaMs', 'localDeliveryQuality', 'remot
 
 export function parseSnapshot(value: unknown): Snapshot {
   if (!object(value) || value.schemaVersion !== 1) throw new Error('Unsupported telemetry schema');
+  if (value.serverImprovements != null && !validImprovements(value.serverImprovements, timing)) throw new Error('Invalid server improvements');
+  if (value.sampleIntervalSeconds != null && (!number(value.sampleIntervalSeconds) || value.sampleIntervalSeconds < 0.5 || value.sampleIntervalSeconds > 10)) throw new Error('Invalid sample interval');
+  if (value.clientTelemetry != null && !validClientTelemetry(value.clientTelemetry)) throw new Error('Invalid client telemetry');
+  if (!['clockUtcMs', 'windowEndMonotonicMs', 'worstFrameEndMonotonicMs', 'longFrames250Ms', 'clientChangedZdos'].every(k => value[k] == null || number(value[k]))
+    || value.gcCollections != null && (!Array.isArray(value.gcCollections) || value.gcCollections.length !== 3 || !value.gcCollections.every(number))) throw new Error('Invalid timeline fields');
   if (typeof value.processSession !== 'string' || !(typeof value.worldSession === 'string' || value.worldSession === null)
     || !Number.isSafeInteger(value.sequence) || !number(value.sequence)
     || typeof value.capturedAtUtc !== 'string' || !Number.isFinite(Date.parse(value.capturedAtUtc))
@@ -123,6 +140,7 @@ export function parseSnapshot(value: unknown): Snapshot {
       || typeof peer.transport !== 'string' || typeof peer.connected !== 'boolean' || typeof peer.measurementStatus !== 'string'
       || !peerNumbers.every(k => nullableNumber(peer[k])) || !number(peer.zdoBatchesReceivedInWindow)) throw new Error('Invalid peer metrics');
     ids.add(peer.peerSessionId);
+    if (peer.improvements != null && !validPeerImprovements(peer.improvements)) throw new Error('Invalid peer improvements');
     if (!['heartbeatAgeSeconds', 'applicationQueuedPackets', 'applicationQueueNonemptySeconds'].every(k => peer[k] == null || number(peer[k]))
       || !(peer.applicationQueueGrowthBytesPerSecond == null || typeof peer.applicationQueueGrowthBytesPerSecond === 'number' && Number.isFinite(peer.applicationQueueGrowthBytesPerSecond))
       || !(peer.connectionHealthStatus == null || typeof peer.connectionHealthStatus === 'string')) throw new Error('Invalid connection health');

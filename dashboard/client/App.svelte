@@ -4,6 +4,8 @@
   import ConnectionDiagnostics from './ConnectionDiagnostics.svelte';
   import RuntimeMetrics from './RuntimeMetrics.svelte';
   import ReportControls from './ReportControls.svelte';
+  import ClientTelemetry from './ClientTelemetry.svelte';
+  import ServerImprovements from './ServerImprovements.svelte';
   import type { MetricsResponse } from '../shared/telemetry';
 
   let data = $state<MetricsResponse | null>(null);
@@ -16,6 +18,7 @@
   const active = $derived(peers.find(p => p.peerSessionId === selected));
   const unavailablePeers = $derived(peers.filter(p => p.connected && p.measurementStatus !== 'available'));
   const status = $derived(error ? 'offline' : data?.status ?? 'waiting');
+  const improvementsActive = $derived(snapshot?.features?.some(f => ['SendWindows', 'SteamRate', 'CaptainOwnership', 'Compression'].includes(f.id) && f.status === 'active'));
   const blockedProbes = $derived(snapshot?.features?.filter(f => f.enabled && !['available', 'active', 'installed_waiting'].includes(f.status)).length ?? 0);
   const short = (id: string) => id.length > 8 ? '…' + id.slice(-8) : id;
   const number = (value: number | null | undefined, digits = 1) => value == null ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: digits });
@@ -60,9 +63,11 @@
     <a href="#connections">⇄ <span>Connections</span></a>
     <a href="#runtime">◷ <span>Resources &amp; scheduling</span></a>
     <a href="#ownership">◇ <span>Ownership</span></a>
+    <a href="#improvements">↗ <span>Improvements</span></a>
     <a href="#diagnostics">◎ <span>Diagnostics</span></a>
     <a href="/reports">▤ <span>Reports</span></a>
-    <div class="sidebar-footer"><span class="eyebrow">{snapshot?.scheduler?.status === 'active' ? 'FAIR SCHEDULER' : 'OBSERVER MODE'}</span><p>{snapshot?.scheduler?.status === 'active' ? 'Experimental scheduling active. Watch service age and frame tails.' : 'Collecting measurements. Vanilla scheduling is retained.'}</p></div>
+    <a href="/history">◷ <span>History</span></a>
+    <div class="sidebar-footer"><span class="eyebrow">{improvementsActive ? 'SERVER IMPROVEMENTS' : snapshot?.scheduler?.status === 'active' ? 'FAIR SCHEDULER' : 'OBSERVER MODE'}</span><p>{improvementsActive ? 'Replication experiments active. Compare results with a saved baseline.' : snapshot?.scheduler?.status === 'active' ? 'Experimental scheduling active. Watch service age and frame tails.' : 'Collecting measurements. Vanilla scheduling is retained.'}</p></div>
   </aside>
   <main id="overview">
     <header>
@@ -70,10 +75,11 @@
       <div class="live-block"><span class="status {status}"><span class="dot"></span>{status}</span><small>{snapshot ? new Date(snapshot.capturedAtUtc).toLocaleTimeString() : 'No snapshot yet'}</small></div>
     </header>
     <ReportControls {data} onreset={(next) => { revision++; data = next; error = false; }} />
+    {#if snapshot}<ClientTelemetry {snapshot} />{/if}
     {#if status !== 'live'}
       <div class="notice" role="status">{error ? 'Dashboard connection lost. Any displayed values are the last received measurements.' : data?.message ?? 'Connecting to the metrics service…'}</div>
     {/if}
-    {#if blockedProbes > 0}<div class="notice" role="status">{blockedProbes} diagnostic probe(s) unavailable. <a href="#diagnostics">Review compatibility and probe status.</a></div>{/if}
+    {#if blockedProbes > 0}<div class="notice" role="status">{blockedProbes} feature(s) unavailable. <a href="#diagnostics">Review compatibility and feature status.</a></div>{/if}
     {#if unavailablePeers.length > 0}<div class="notice" role="status">Connection measurements unavailable for {unavailablePeers.length} of {peers.filter(p => p.connected).length} connected peers in this snapshot. Missing values do not indicate a healthy connection. <a href="#connection-diagnostics">View error details.</a></div>{/if}
     <div class="cards">
       <section class="stat"><span class="eyebrow">CONNECTED PEERS</span><strong>{snapshot ? peers.length : '—'}</strong><small>Server-observed connections</small></section>
@@ -92,6 +98,7 @@
     </section>
     {#if active}<section class="panel detail"><div class="panel-heading"><h2>Peer {short(active.peerSessionId)}</h2><span class="eyebrow">{active.transport}</span></div><div class="detail-grid"><div><span>Application queue</span><strong>{kib(active.applicationQueuedBytes)} KiB</strong></div><div><span>Pending reliable</span><strong>{kib(active.pendingReliableBytes)} KiB</strong></div><div><span>Pending unreliable</span><strong>{kib(active.pendingUnreliableBytes)} KiB</strong></div><div><span>Sent, awaiting acknowledgment</span><strong>{kib(active.sentUnacknowledgedReliableBytes)} KiB</strong></div></div><p class="muted">Client CPU / frame timing: not reported. Outstanding data includes already-sent reliable bytes; it is not all waiting to leave the server.</p></section>{/if}
     {#if snapshot && (snapshot.scheduler || snapshot.resources)}<RuntimeMetrics {snapshot} history={data?.history ?? []} />{/if}
+    {#if snapshot}<ServerImprovements {snapshot} />{/if}
     <section class="panel" id="ownership"><div class="panel-heading"><div><h2>Loaded-object ownership</h2><p class="muted">Ownership is distinct from who hosts the server.</p></div><span class="eyebrow">{snapshot?.ownershipStatus ?? 'Unavailable'}</span></div><div class="owners">{#each snapshot?.loadedOwnership ?? [] as owner}<div class="owner"><span>{owner.ownerSessionId === '0' ? 'Unowned' : 'Session ' + short(owner.ownerSessionId)}</span><strong>{number(owner.objects, 0)}</strong></div>{:else}<p class="muted">No loaded-object ownership measurements.</p>{/each}</div></section>
     <section class="panel" id="diagnostics">
       <div class="panel-heading"><div><h2>Diagnostic probes</h2><p class="muted">Game {snapshot?.compatibility?.gameVersion ?? 'unknown'} · Protocol {snapshot?.compatibility?.networkVersion ?? 'unknown'} · {snapshot?.compatibility?.status ?? 'Compatibility not reported'}</p></div></div>
@@ -110,6 +117,6 @@
         {:else}<p class="muted">{peers.length ? 'No connected peer measurement failures in this snapshot.' : 'Awaiting a connected peer.'}</p>{/each}
       </div>
     </section>
-    <footer><span>valheim-boosted <span class="muted">/ {snapshot?.modVersion ?? 'awaiting mod'}</span></span><span>— means unavailable · History is kept in memory</span></footer>
+    <footer><span>valheim-boosted <span class="muted">/ {snapshot?.modVersion ?? 'awaiting mod'}</span></span><span>— means unavailable · Overview charts show recent samples</span></footer>
   </main>
 </div>

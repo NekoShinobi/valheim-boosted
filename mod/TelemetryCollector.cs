@@ -30,7 +30,9 @@ internal sealed class TelemetryCollector
     private double lastSampleAt;
     private long sequence;
     private int fixedUpdates;
-    private int frames50, frames100;
+    private int frames50, frames100, frames250;
+    private double worstFrameMs;
+    private double? worstFrameEndMs;
     private readonly ResourceSampler resources = new ResourceSampler();
     private readonly TelemetryIntegration integration;
     private readonly MeasurementDiagnostics diagnostics;
@@ -50,7 +52,8 @@ internal sealed class TelemetryCollector
         if (integration.Features["FrameTiming"].Collect)
             {
             double ms = (now - lastFrameAt) * 1000;
-            frames.Add(ms); if (ms >= 50) frames50++; if (ms >= 100) frames100++;
+            frames.Add(ms); if (ms >= 50) frames50++; if (ms >= 100) frames100++; if (ms >= 250) frames250++;
+            if (ms > worstFrameMs) { worstFrameMs = ms; worstFrameEndMs = now * 1000; }
         }
         lastFrameAt = now;
     }
@@ -84,6 +87,8 @@ internal sealed class TelemetryCollector
             capturedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
             uptimeSeconds = now - startedAt,
             sampleWindowSeconds = now - lastSampleAt,
+            windowEndMonotonicMs = now * 1000,
+            worstFrameEndMonotonicMs = worstFrameEndMs,
             role = !net ? "menu" : isServer ? (net.IsDedicated() ? "dedicated_server" : "host") : "client",
             frameIntervalMs = frames.Take(),
             networkUpdateDurationMs = network.Take(),
@@ -92,6 +97,7 @@ internal sealed class TelemetryCollector
             fixedUpdates = fixedUpdates,
             longFrames50Ms = integration.Features["FrameTiming"].Collect ? (int?)frames50 : null,
             longFrames100Ms = integration.Features["FrameTiming"].Collect ? (int?)frames100 : null,
+            longFrames250Ms = integration.Features["FrameTiming"].Collect ? (int?)frames250 : null,
             resources = integration.Features["ProcessResources"].Collect ? resources.Capture(now) : null,
             fixedStepSeconds = UnityEngine.Time.fixedDeltaTime,
             managedMemoryBytes = GC.GetTotalMemory(false),
@@ -103,7 +109,7 @@ internal sealed class TelemetryCollector
             snapshot.gcCollections[i] = current - previousGc[i];
             previousGc[i] = current;
         }
-        fixedUpdates = 0; frames50 = frames100 = 0;
+        fixedUpdates = 0; frames50 = frames100 = frames250 = 0; worstFrameMs = 0; worstFrameEndMs = null;
         lastSampleAt = now;
         var peers = new List<PeerMetrics>();
         var live = new HashSet<ZRpc>();

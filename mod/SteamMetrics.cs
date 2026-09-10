@@ -19,16 +19,25 @@ internal static class SteamMetrics
         if (Connection == null || Connection.IsStatic || Connection.FieldType != typeof(HSteamNetConnection)
             || SendQueue == null || SendQueue.IsStatic || SendQueue.FieldType != typeof(Queue<byte[]>))
             throw new InvalidOperationException("Steam connection/queue field contract changed");
-        var quality = AccessTools.DeclaredMethod(typeof(ZSteamSocket), "GetConnectionQuality",
-            new[] { typeof(float).MakeByRefType(), typeof(float).MakeByRefType(), typeof(int).MakeByRefType(), typeof(float).MakeByRefType(), typeof(float).MakeByRefType() });
-        if (quality == null) throw new InvalidOperationException("Game transport quality method missing");
-        var calls = CompatibilityPolicy.Calls(quality).OfType<MethodInfo>().Where(m => m.Name == "GetConnectionRealTimeStatus"
+        // GetConnectionQuality uses the client API even in the dedicated-server build.
+        // The queue query uses the interface that owns the game's transport connections.
+        var queueSize = AccessTools.DeclaredMethod(typeof(ZSteamSocket), "GetSendQueueSize", Type.EmptyTypes);
+        if (!CompatibilityPolicy.Signature(queueSize, typeof(ZSteamSocket), typeof(int), Type.EmptyTypes))
+            throw new InvalidOperationException("Game transport queue method contract changed");
+        var calls = CompatibilityPolicy.Calls(queueSize).OfType<MethodInfo>().Where(m => m.Name == "GetConnectionRealTimeStatus"
             && (m.DeclaringType.FullName == "Steamworks.SteamNetworkingSockets" || m.DeclaringType.FullName == "Steamworks.SteamGameServerNetworkingSockets"))
             .Distinct().ToArray();
         var parameters = new[] { typeof(HSteamNetConnection), typeof(SteamNetConnectionRealTimeStatus_t).MakeByRefType(), typeof(int), typeof(SteamNetConnectionRealTimeLaneStatus_t).MakeByRefType() };
         if (calls.Length != 1 || !calls[0].IsStatic || calls[0].ReturnType != typeof(EResult)
             || !calls[0].GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters))
             throw new InvalidOperationException("Cannot identify the game's exact Steam status interface");
+        var send = AccessTools.DeclaredMethod(typeof(ZSteamSocket), "SendQueuedPackages", Type.EmptyTypes);
+        if (!CompatibilityPolicy.Signature(send, typeof(ZSteamSocket), typeof(void), Type.EmptyTypes))
+            throw new InvalidOperationException("Game transport send method contract changed");
+        var sendCalls = CompatibilityPolicy.Calls(send).OfType<MethodInfo>()
+            .Where(m => m.Name == "SendMessageToConnection").Distinct().ToArray();
+        if (sendCalls.Length != 1 || sendCalls[0].DeclaringType != calls[0].DeclaringType)
+            throw new InvalidOperationException("Steam status interface does not match the game's send interface");
         readStatus = calls[0];
         return readStatus.DeclaringType.FullName;
     }

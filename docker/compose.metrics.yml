@@ -12,6 +12,7 @@ services:
       TELEMETRY_PATH: /telemetry/snapshot.json
       HISTORY_SAMPLES: '300'
       REPORTS_DIRECTORY: /reports
+      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-7}
     volumes:
       - type: bind
         source: ${TELEMETRY_DIRECTORY:?Set TELEMETRY_DIRECTORY to the host telemetry directory}

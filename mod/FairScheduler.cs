@@ -16,6 +16,11 @@ internal sealed class FairScheduler<T>
     internal SchedulerTurn Run(IReadOnlyList<T> peers, double elapsed, int maxCalls, double budgetMs,
         int debtCap, Func<double> clock, Action<T> service)
     {
+        if (peers.Count == 0)
+        {
+            Clear();
+            return new SchedulerTurn();
+        }
         double started = clock();
         var live = new HashSet<T>(peers);
         for (int i = entries.Count - 1; i >= 0; i--)

@@ -4,6 +4,21 @@
 
 **Pre-alpha · Initial package**
 
+- Added opt-in Stage 3 per-peer ZDO allowances with RTT/unsent-queue feedback and conservative connection-scoped Steam maximum-rate changes, including verified readback, restoration and external-writer handling.
+- Added opt-in Stage 4 captain ownership for eligible vanilla ships, with replicated helm-grant/attachment checks, exact reviewed contracts, dwell/cooldown and bounded transfers.
+- Added opt-in Stage 5 lossless ZDO compression with directional capability negotiation, per-session tokens, bounded framing/decompression, soft encoding budgets, vanilla send fallback and queued-frame draining.
+- Added server-improvement views, per-peer settings, compression savings/cost, ship transfers, report metadata/comparisons and persistent LayerChart history metrics. Schema 3 appends metric layout 2 while retaining earlier samples, rollups and saved timelines.
+- Added managed/Mono policy and protocol tests, real Harmony send transforms against client/dedicated references, and dashboard aggregation/history-migration checks for Stages 3–5.
+
+- Added configurable empty-server idle mode: a 60-second grace period, a 10 FPS cap, five-second telemetry, and restoration on joins, saves, world changes and shutdown. Dashboard freshness follows the advertised sampling interval.
+
+- Added seven-day persistent SQLite history, minute summaries for long ranges, aligned player/server timelines, shared chart inspection, and report timeline archives that survive live-history expiration.
+- Track each login separately and recognize returning Steam accounts with a persistent server-keyed pseudonym. History combines players across reconnects by default, with session boundaries, weighted range totals and preserved archive weights; names and reused peer IDs never determine identity.
+- Replace ECharts with LayerChart SVG graphs, coordinated hover, clickable time inspection, interactive legends and responsive dark styling.
+- Migrate history storage to schema v2 without discarding raw samples; rebuild derived summaries to fix integer truncation in weighted means. Keep older unidentified history separate and older reports readable.
+- Added default-enabled client performance sharing with bounded binary RPC batches, server-side clock alignment and uncertainty, frame/CPU/GC/connection metrics, F9 lag markers, congestion backoff, explicit sharing/reception switches and optional character-name labels. Unmodded clients remain compatible.
+- Fixed dedicated-server Steam measurements failing with `Steamworks is not initialized` by selecting the queue query's Steam interface and checking that it matches the game's send path.
+
 - Added persistent metrics reports, shared dashboard-stat reset, JSON downloads, and a separate baseline/candidate comparison page with settings, coverage, weighted timing means and observed counter rates. Added a writable reports volume to Docker deployment examples.
 - Added the default-enabled Stage 2 fair scheduler for dedicated Steam servers: persistent peer cursor, capped 20 Hz credit, time/work limits, verified patch contracts, and vanilla fallback.
 - Added replication attempts, outcomes, ZDO counts, payload bytes, service age/intervals, heartbeat age, bounded managed queue scans and growth, Valheim CPU/RSS/threads, frame p99/long-frame counts, save timings, and the running mod build ID.
@@ -26,4 +41,4 @@
 - Removed the extra ZIP wrapper from GitHub workflow downloads and documented Linux manual installation paths.
 - Added a separate `-plugins.zip` download for direct extraction into `BepInEx/plugins`, including Docker's mounted plugins directory.
 
-The scheduler is experimental and enabled by default in new configurations. Existing saved settings are preserved. Native rate/window tuning, ownership reassignment, and client CPU reporting remain unimplemented. Multiplayer performance and gameplay acceptance testing remain pending.
+The scheduler is experimental and enabled by default in new configurations. Existing saved settings are preserved. Stages 3–5 are implemented behind default-off switches; general NPC simulation reassignment remains future work. Multiplayer performance and gameplay acceptance testing remain pending.

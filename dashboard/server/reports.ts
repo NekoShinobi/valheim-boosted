@@ -1,16 +1,18 @@
 import { mkdir, open, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { reportMetrics, type ReportDraft, type ReportSummary, type SavedReport } from '../shared/reports';
+import { validHistoryArchive } from '../shared/history';
+import { validImprovementSettings } from '../shared/improvements';
 
 const validId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const fileLimit = 1024 * 1024;
+const fileLimit = 4 * 1024 * 1024;
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const nonnegative = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const textOrNull = (v: unknown) => v === null || typeof v === 'string';
 const timestamp = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
 function validSource(v: unknown): boolean {
   if (!object(v) || !['processSession', 'role', 'modVersion'].every(k => typeof v[k] === 'string')
-    || !textOrNull(v.worldSession) || !textOrNull(v.modBuildId)
+    || !textOrNull(v.worldSession) || !textOrNull(v.modBuildId) || v.serverImprovements != null && !validImprovementSettings(v.serverImprovements)
     || !Array.isArray(v.features) || v.features.length > 32
     || !v.features.every(f => object(f) && typeof f.id === 'string' && typeof f.enabled === 'boolean')) return false;
   const c = v.compatibility, s = v.scheduler;
@@ -50,6 +52,8 @@ export class ReportRepository {
         || !(Number(value.snapshots) > 0) || !(Number(value.observedSeconds) > 0) || !textOrNull(value.pausedReason)
         || !['waiting', 'live', 'stale', 'stopped', 'invalid'].includes(String(value.telemetryStatus))
         || !validSource(value.source) || !object(value.metrics)
+        || value.timeline != null && !validHistoryArchive(value.timeline)
+        || value.timelineError != null && (typeof value.timelineError !== 'string' || value.timelineError.length > 1024)
         || !Object.entries(value.metrics).every(([key, m]) => reportMetrics.some(d => d.id === key) && object(m) &&
           ['observations', 'windows', 'weight', 'mean', 'min', 'max', 'total', 'availableSeconds'].every(k => nonnegative(m[k])))) {
         throw new Error('Invalid saved report');

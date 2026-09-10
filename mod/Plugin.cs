@@ -20,7 +20,10 @@ public sealed class Plugin : BaseUnityPlugin
     public const string PluginVersion = "0.1.0";
     private TelemetryIntegration integration;
     private TelemetryCollector collector;
+    private ClientTelemetryTransport clientTelemetry;
     private ReplicationIntegration replication;
+    private IdleServerIntegration idleServer;
+    private CaptainIntegration captain;
     private SnapshotExporter exporter;
     private TelemetrySnapshot latest;
     private ConfigEntry<bool> hudEnabled;
@@ -58,6 +61,9 @@ public sealed class Plugin : BaseUnityPlugin
         TelemetryHooks.Integration = integration;
         integration.Install();
         replication = new ReplicationIntegration(Config, integration, message => Logger.LogInfo(message));
+        clientTelemetry = new ClientTelemetryTransport(Config, integration);
+        idleServer = new IdleServerIntegration(Config, integration);
+        captain = new CaptainIntegration(Config, integration, message => Logger.LogInfo(message));
         nextSample = TelemetryCollector.Now + interval.Value;
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded (build {typeof(Plugin).Module.ModuleVersionId}). Telemetry ready; optional scheduler status is reported separately. F8 toggles HUD.");
     }
@@ -71,13 +77,22 @@ public sealed class Plugin : BaseUnityPlugin
         var net = ZNet.instance;
         if (net && !net.IsDedicated() && hudKey.Value.IsDown()) hudEnabled.Value = !hudEnabled.Value;
         double now = TelemetryCollector.Now;
-        try { integration.Audit(now); replication.Audit(now); }
+        bool wasIdle = idleServer.Idle;
+        idleServer.Tick(now);
+        // Publish the new cadence on transitions, and never delay a wake-up snapshot.
+        if (wasIdle != idleServer.Idle) nextSample = now;
+        try { integration.Audit(now); replication.Audit(now); replication.Advanced.Tick(now); captain.Tick(now); clientTelemetry.Tick(now); }
         catch (Exception ex) { Warn("Patch audit failed: " + ex.Message); }
         if (now < nextSample) return;
-        nextSample = now + interval.Value;
+        double sampleInterval = idleServer.SampleInterval(interval.Value);
+        nextSample = now + sampleInterval;
         try
         {
             latest = collector.Capture();
+            latest.sampleIntervalSeconds = sampleInterval;
+            clientTelemetry.Capture(latest);
+            replication.Advanced.Capture(latest);
+            captain.Capture(latest.serverImprovements);
             bool shouldExport = net && (net.IsServer() ? exportServer.Value : exportClient.Value);
             if (shouldExport && exporter == null) exporter = new SnapshotExporter(configuredPath);
             latest.exportError = exporter?.Error;
@@ -86,6 +101,7 @@ public sealed class Plugin : BaseUnityPlugin
             wasExporting = shouldExport;
             if (latest.exportError != null) Warn("Telemetry export: " + latest.exportError);
             hudText = FormatHud(latest, hudKey.Value.ToString());
+            if (latest.role == "client") hudText += "\nClient telemetry: " + clientTelemetry.Status + " · " + clientTelemetry.MarkerShortcut + " marks lag";
         }
         catch (Exception ex) { Warn("Telemetry collection unavailable: " + ex); hudText = "ValheimBoosted: telemetry unavailable (see log)"; }
     }
@@ -142,12 +158,14 @@ public sealed class Plugin : BaseUnityPlugin
     }
 
     private void OnApplicationQuit() => Stop();
+    private void OnDisable() => idleServer?.Suspend();
     private void OnDestroy() => Stop();
 
     private void Stop()
     {
         if (stopped) return;
         stopped = true;
+        idleServer?.Dispose();
         if (exporter != null)
         {
             // A new DTO prevents mutation of a snapshot the worker might still be serializing.
@@ -164,6 +182,7 @@ public sealed class Plugin : BaseUnityPlugin
         TelemetryHooks.Collector = null;
         TelemetryHooks.Integration = null;
         replication?.Dispose();
+        clientTelemetry?.Dispose();
         integration?.Dispose();
     }
 }
