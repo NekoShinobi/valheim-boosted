@@ -4,6 +4,8 @@
 
 **Pre-alpha · Initial package**
 
+- Added draft-based GitHub release preparation: write Markdown notes and choose release/pre-release in the release editor, build and attach both installation ZIPs with checksums, then publish. Publishing also triggers the versioned metrics image build.
+
 - Added opt-in Stage 3 per-peer ZDO allowances with RTT/unsent-queue feedback and conservative connection-scoped Steam maximum-rate changes, including verified readback, restoration and external-writer handling.
 - Added opt-in Stage 4 captain ownership for eligible vanilla ships, with replicated helm-grant/attachment checks, exact reviewed contracts, dwell/cooldown and bounded transfers.
 - Added opt-in Stage 5 lossless ZDO compression with directional capability negotiation, per-session tokens, bounded framing/decompression, soft encoding budgets, vanilla send fallback and queued-frame draining.

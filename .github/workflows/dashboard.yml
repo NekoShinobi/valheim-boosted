@@ -5,6 +5,8 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -50,6 +52,9 @@ jobs:
         id: metadata
         with:
           images: ${{ steps.image.outputs.name }}
+          # Keep latest as the existing main-branch channel. A numeric pre-release
+          # must not become latest through metadata-action's semver auto-tagging.
+          flavor: latest=false
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch

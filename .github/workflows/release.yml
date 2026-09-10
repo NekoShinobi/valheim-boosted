@@ -1,0 +1,75 @@
+name: Prepare GitHub release
+run-name: Prepare ${{ inputs.tag }} from its saved release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Saved draft tag (for example v0.1.0). Write notes and choose pre-release in Releases → Draft a new release first.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # GitHub only lists unpublished drafts for callers with repository push access.
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.draft.outputs.sha }}
+      release_id: ${{ steps.draft.outputs.release_id }}
+      target: ${{ steps.draft.outputs.target }}
+      version: ${{ steps.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve draft to one commit
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/prepare-release.py resolve
+
+  mod:
+    needs: draft
+    uses: ./.github/workflows/mod.yml
+    with:
+      source_sha: ${{ needs.draft.outputs.sha }}
+      release_tag: ${{ inputs.tag }}
+
+  attach:
+    needs: [draft, mod]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the two original installation ZIPs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: valheim-boosted-${{ needs.draft.outputs.version }}*.zip
+          path: release-assets
+          merge-multiple: true
+          # The build uploads archive:false. Preserve each ready-to-install ZIP.
+          skip-decompress: true
+          digest-mismatch: error
+      - name: Attach checked packages and keep the release as a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+          RELEASE_SHA: ${{ needs.draft.outputs.sha }}
+          RELEASE_TARGET: ${{ needs.draft.outputs.target }}
+        run: python3 scripts/prepare-release.py attach --assets release-assets

@@ -20,6 +20,8 @@ The current pre-alpha combines:
 - A separate Bun service with a Svelte/TypeScript/LayerChart dashboard: JSON snapshot ingestion, persistent SQLite history, reports and comparisons.
 - Two release outputs: mod installation ZIPs and a metrics Docker image. The mod does not launch Bun or host an HTTP listener inside Unity.
 
+GitHub releases use the native draft editor for Markdown notes and the pre-release checkbox. `.github/workflows/release.yml` resolves a saved draft to a commit, calls the reusable mod build, and attaches the original ZIPs plus checksums using `scripts/prepare-release.py`. It leaves publication to the editor; publishing triggers the metrics image build. Source versions and `CHANGELOG.md` must already match the numeric tag. See [release steps](docs/CI.md#create-a-github-release-or-pre-release).
+
 Names are intentional: display/repository `valheim-boosted`, assembly/namespace `ValheimBoosted`, BepInEx GUID and config basename `valheim.boosted`, Thunderstore identifier `valheim_boosted`. `UrfMode`/`urfmode` is the predecessor name, retained only where migration or historical references require it.
 
 ## Source map
