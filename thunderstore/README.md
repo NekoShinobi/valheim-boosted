@@ -2,7 +2,7 @@
 
 **See what your connection is doing.**
 
-`0.2.0` · **Pre-alpha** · Valheim networking diagnostics
+`0.3.0` · **Pre-alpha** · Valheim networking diagnostics
 
 [Source & dashboard setup](https://github.com/NekoShinobi/valheim-boosted) · [Report an issue](https://github.com/NekoShinobi/valheim-boosted/issues)
 

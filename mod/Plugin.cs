@@ -17,7 +17,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "valheim.boosted";
     public const string PluginName = "valheim-boosted";
-    public const string PluginVersion = "0.2.0";
+    public const string PluginVersion = "0.3.0";
     private TelemetryIntegration integration;
     private TelemetryCollector collector;
     private ClientTelemetryTransport clientTelemetry;
